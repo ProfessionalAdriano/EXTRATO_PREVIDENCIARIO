@@ -1,0 +1,17 @@
+-- DOCUMENTACAO:
+
+20/04/2021
+-- Diretorio de leitura:
+SELECT *
+  FROM ALL_DIRECTORIES
+ WHERE OWNER = 'SYS'
+  AND DIRECTORY_NAME = 'DIR_WORK'
+  AND DIRECTORY_PATH = '/dados/oracle/NEWDEV/work'
+  
+  
+-- Usuário disponibilizar o arquivo nesse diretorio:
+
+ftp:\\fcesphorad001
+usuario: integ
+senha: newdev
+
