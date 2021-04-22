@@ -282,10 +282,12 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     -- PROCEDURE PRC_TRATA_ARQUIVO
     FUNCTION FN_TRATA_ARQUIVO
       RETURN BOOLEAN
-        --R_VALIDA BOOLEAN;
-        
+                
     IS
-    V_COUNT NUMBER;
+      V_COUNT NUMBER     :=0;
+      V_CONT_TEMP NUMBER :=0;
+      R_VALIDA BOOLEAN;
+    
     
       CURSOR C_TRATA_DADOS IS
         SELECT DECODE(TO_NUMBER(TPO_DADO),1,2)                                                         AS TPO_DADO       
@@ -516,12 +518,20 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
       
     BEGIN
       --
-      
-      DBMS_OUTPUT.PUT_LINE('PRC_TRATA_ARQUIVO');
+        BEGIN
+             SELECT COUNT(*)INTO V_CONT_TEMP FROM F02860.EXT_TB_BASE_EXTRAT_CTB WHERE TPO_DADO = 1;
+              
+           EXCEPTION
+             WHEN OTHERS THEN 
+                DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
+                DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
+             
+        END;
+        DBMS_OUTPUT.PUT_LINE('PRC_TRATA_ARQUIVO');
       
       --
       --
-      FOR RG_TRATA_DADOS IN C_TRATA_DADOS
+      FOR RG_TRATA_DADOS IN C_TRATA_DADOS 
          LOOP
            -- INSERT 
            --DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.COD_EMPRS||' - '||RG_TRATA_DADOS.NUM_RGTRO_EMPRG);
@@ -749,13 +759,30 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                             ,RG_TRATA_DADOS.IDADE_ELEGIB_BENEF_PRAZO
                                                             ,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PRAZO
                                                             );
-            V_COUNT := V_COUNT + 1;                                                                                                                        
-        
+         IF SQL%ROWCOUNT > 0 THEN                                                                                                                                
+              V_COUNT := V_COUNT + 1;                                                                                                                                                         
+         END IF;
+                   
       END LOOP;
+      
+      IF V_COUNT = V_CONT_TEMP THEN -->  1478 TESTE
+           R_VALIDA:= TRUE;    
+        RETURN R_VALIDA;        
+         COMMIT;
+		 
+      ELSE
+        RETURN R_VALIDA := FALSE;       
+         ROLLBACK;
+       
+      END IF; 
         DBMS_OUTPUT.PUT_LINE('TOTAL DE REGISTROS INSERIDO: '||V_COUNT);
+             
       --
-    EXCEPTION
+    EXCEPTION    
       WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
+      DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
+      RETURN FALSE;
         NULL;
     END FN_TRATA_ARQUIVO;
     
@@ -1168,11 +1195,16 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
   END PRE_PRC_EXT_PREV_ELETROPAULO;
 
-  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
-                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE)
+  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
+                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL)
   IS
+  
+  VAR_TESTE BOOLEAN;
+  
   BEGIN
-     IF (P_PRC_PROCESSO = 1) THEN
+  
+  VAR_TESTE := FN_TRATA_ARQUIVO;
+/*     IF (P_PRC_PROCESSO = 1) THEN
         --
         PRE_PRC_EXT_PREV_ELETROPAULO(40,'PSAP/ELETROPAULO', P_PRC_DATA); -- ELETROPAULO
         --
@@ -1188,7 +1220,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         --
         DBMS_OUTPUT.PUT_LINE('4');
         --
-      END IF;
+      END IF;*/
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;
