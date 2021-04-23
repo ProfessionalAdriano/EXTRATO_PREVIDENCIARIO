@@ -13,7 +13,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 -- MANUTENCOES : PSD-32395 - DATA: 09/03/2021 ANALISTA ADRIANO LIMA CRIACAO DA PROCEDURE PROC_EXT_PREV_TIETE
 --               ESSA MANUTENCAO CONSISTE EM INSERIR O BDS NO EXTRATO PREVIDENCIARIO (31 PSAP/TIETE)
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                           
-/*    PROCEDURE PRC_INICIALIZA_VARIAVEIS IS
+/*
+    PROCEDURE PRC_INICIALIZA_VARIAVEIS IS
+    
     BEGIN
       -- captura o usuario logado no BD para gravar na tabela
       -- de log do processamento de integracao
@@ -37,6 +39,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         FROM SYS.V_$INSTANCE I;
       --
     END PRC_INICIALIZA_VARIAVEIS;
+    
 
     PROCEDURE PRC_GRAVA_LOG ( P_COD_LOG_CARGA_EXTRATO NUMBER    DEFAULT NULL
                              ,P_TPO_DADO              NUMBER    DEFAULT NULL
@@ -55,7 +58,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                            )
     IS
     BEGIN
-      --
+      -- TABELA DE LOG
       INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (  COD_LOG_CARGA_EXTRATO
                                                           ,TPO_DADO
                                                           ,COD_EMPRS
@@ -122,7 +125,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     END FN_VALIDA_TABELA;
 
     FUNCTION FN_EXECUTE(P_SP_DDL IN CLOB) RETURN BOOLEAN IS
-       L_CURSOR     PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+     L_CURSOR     PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
      L_FEEDBACK   PLS_INTEGER;
      
            R_RETURN_EXECUTE BOOLEAN:= FALSE;
@@ -147,9 +150,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
          END IF;
       END;
       --
-  \*    DBMS_SQL.PARSE(L_CURSOR, P_SP_DDL,DBMS_SQL.NATIVE);
+      DBMS_SQL.PARSE(L_CURSOR, P_SP_DDL,DBMS_SQL.NATIVE);
       L_FEEDBACK := DBMS_SQL.EXECUTE (L_CURSOR);    
-      DBMS_SQL.CLOSE_CURSOR (L_CURSOR);*\
+      DBMS_SQL.CLOSE_CURSOR (L_CURSOR);
     EXCEPTION
       WHEN E_NOT_EXIST THEN 
         PRC_GRAVA_LOG( P_DT_INCLUSAO  => SYSDATE
@@ -214,10 +217,10 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
            L_COUNT := L_COUNT + 1;         
         END LOOP;
 
-  \*      L_CONTEUDO := TO_CLOB( REPLACE( G_DDL_CREATE_TABLE ||
+        L_CONTEUDO := TO_CLOB( REPLACE( G_DDL_CREATE_TABLE ||
                                G_DDL_COLUMNN_TABLE || ')' || CHR(13) ||
                                REPLACE(G_EXT_CONST,'<FILENAME>','''''' || G_NAME || '''''')
-                              ,'), )',') )') );*\
+                              ,'), )',') )') );
 
         L_CONTEUDO :=  REPLACE( G_DDL_CREATE_TABLE ||
                                TO_CLOB(G_DDL_COLUMNN_TABLE || ')') || CHR(13) ||
@@ -277,8 +280,10 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                       
         R_RETURN_CARGA := FALSE;
       
-    END FN_CARGA_ARQUIVO;*/
+    END FN_CARGA_ARQUIVO;
     
+    
+*/    
     -- PROCEDURE PRC_TRATA_ARQUIVO
     FUNCTION FN_TRATA_ARQUIVO
       RETURN BOOLEAN
@@ -535,229 +540,229 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
          LOOP
            -- INSERT 
            --DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.COD_EMPRS||' - '||RG_TRATA_DADOS.NUM_RGTRO_EMPRG);
-          INSERT INTO ATT.FC_PRE_TBL_BASE_EXTRAT_CTB VALUES( RG_TRATA_DADOS.TPO_DADO
-                                                            ,RG_TRATA_DADOS.COD_EMPRS
-                                                            ,RG_TRATA_DADOS.NUM_RGTRO_EMPRG
-                                                            ,RG_TRATA_DADOS.NOM_EMPRG
-                                                            ,RG_TRATA_DADOS.DTA_EMISS
-                                                            ,RG_TRATA_DADOS.NUM_FOLHA
-                                                            ,RG_TRATA_DADOS.DCR_PLANO
-                                                            ,RG_TRATA_DADOS.PER_INIC_EXTR
-                                                            ,RG_TRATA_DADOS.PER_FIM_EXTR
-                                                            ,RG_TRATA_DADOS.DTA_INIC_EXTR
-                                                            ,RG_TRATA_DADOS.DTA_FIM_EXTR
-                                                            ,RG_TRATA_DADOS.DCR_SLD_MOV_SALDADO
-                                                            ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_INIC
-                                                            ,RG_TRATA_DADOS.CTB_PL_SALDADO_MOV
-                                                            ,RG_TRATA_DADOS.RENT_PL_SALDADO_MOV
-                                                            ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_FIM
-                                                            ,RG_TRATA_DADOS.DCR_SLD_MOV_BD
-                                                            ,RG_TRATA_DADOS.SLD_PL_BD_INIC
-                                                            ,RG_TRATA_DADOS.CTB_PL_MOV_BD
-                                                            ,RG_TRATA_DADOS.RENT_PL_MOV_BD
-                                                            ,RG_TRATA_DADOS.SLD_PL_BD_MOV_FIM
-                                                            ,RG_TRATA_DADOS.DCR_SLD_MOV_CV
-                                                            ,RG_TRATA_DADOS.SLD_PL_CV_MOV_INIC
-                                                            ,RG_TRATA_DADOS.CTB_PL_MOV_CV
-                                                            ,RG_TRATA_DADOS.RENT_PL_MOV_CV
-                                                            ,RG_TRATA_DADOS.SLD_PL_CV_MOV_FIM
-                                                            ,RG_TRATA_DADOS.DCR_CTA_OBRIG_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_OBRIG_PARTIC
-                                                            ,RG_TRATA_DADOS.CTB_CTA_OBRIG_PARTIC
-                                                            ,RG_TRATA_DADOS.RENT_CTA_OBRIG_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_OBRIG_PARTIC_FIM
-                                                            ,RG_TRATA_DADOS.DCR_CTA_NORM_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_NORM_PATROC
-                                                            ,RG_TRATA_DADOS.CTB_CTA_NORM_PATROC
-                                                            ,RG_TRATA_DADOS.RENT_NORM_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_NORM_PATROC_INIC
-                                                            ,RG_TRATA_DADOS.DCR_CTA_ESPEC_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PARTIC
-                                                            ,RG_TRATA_DADOS.CTB_CTA_ESPEC_PARTIC
-                                                            ,RG_TRATA_DADOS.RENT_CTA_ESPEC_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PARTIC_INIC
-                                                            ,RG_TRATA_DADOS.DCR_CTA_ESPEC_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PATROC
-                                                            ,RG_TRATA_DADOS.CTB_CTA_ESPEC_PATROC
-                                                            ,RG_TRATA_DADOS.RENT_CTA_ESPEC_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PATROC_INIC
-                                                            ,RG_TRATA_DADOS.SLD_TOT_INIC
-                                                            ,RG_TRATA_DADOS.CTB_TOT_INIC
-                                                            ,RG_TRATA_DADOS.RENT_PERIODO
-                                                            ,RG_TRATA_DADOS.SLD_TOT_FIM
-                                                            ,RG_TRATA_DADOS.PRM_MES_PERIODO_CTB
-                                                            ,RG_TRATA_DADOS.SEG_MES_PERIODO_CTB
-                                                            ,RG_TRATA_DADOS.TER_MES_PERIODO_CTB
-                                                            ,RG_TRATA_DADOS.DCR_TOT_CTB_BD
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TOT_CTB_CV
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_VOL_PARTIC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_VOL_PATROC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_OBRIG_PARTIC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_OBRIG_PATROC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_ESPOR_PATROC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_PERIODO
-                                                            ,RG_TRATA_DADOS.DCR_TPO_CTB_ESPOR_PARTIC
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_PRM_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_SEG_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_TER_MES
-                                                            ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_PERIODO
-                                                            ,RG_TRATA_DADOS.TOT_CTB_PRM_MES
-                                                            ,RG_TRATA_DADOS.TOT_CTB_SEG_MES
-                                                            ,RG_TRATA_DADOS.TOT_CTB_TER_MES
-                                                            ,RG_TRATA_DADOS.TOT_CTB_EXTRATO
-                                                            ,RG_TRATA_DADOS.PRM_MES_PERIODO_RENT
-                                                            ,RG_TRATA_DADOS.SEG_MES_PERIODO_RENT
-                                                            ,RG_TRATA_DADOS.TER_MES_PERIODO_RENT
-                                                            ,RG_TRATA_DADOS.PCT_RENT_REAL_PRM_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_REAL_SEG_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_REAL_TER_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_REAL_TOT_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_LMTD_PRM_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_LMTD_SEG_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_LMTD_TER_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_LMTD_TOT_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_IGPDI_PRM_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_IGPDI_SEG_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TER_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TOT_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_URR_PRM_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_URR_SEG_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_URR_TER_MES
-                                                            ,RG_TRATA_DADOS.PCT_RENT_URR_TOT_MES
-                                                            ,RG_TRATA_DADOS.DTA_APOS_PROP
-                                                            ,RG_TRATA_DADOS.DTA_APOS_INTE
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_PSAP_PROP
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_PSAP_INTE
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_BD_PROP
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_BD_INTE
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_CV_PROP
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_CV_INTE
-                                                            ,RG_TRATA_DADOS.RENDA_ESTIM_PROP
-                                                            ,RG_TRATA_DADOS.RENDA_ESTIM_INT
-                                                            ,RG_TRATA_DADOS.VLR_RESERV_SALD_LQDA
-                                                            ,RG_TRATA_DADOS.TXT_PRM_MENS
-                                                            ,RG_TRATA_DADOS.TXT_SEG_MENS
-                                                            ,RG_TRATA_DADOS.TXT_TER_MENS
-                                                            ,RG_TRATA_DADOS.TXT_QUA_MENS
-                                                            ,RG_TRATA_DADOS.IDADE_PROP_BSPS
-                                                            ,RG_TRATA_DADOS.VLR_CTB_PROP_BSPS
-                                                            ,RG_TRATA_DADOS.IDADE_INT_BSPS
-                                                            ,RG_TRATA_DADOS.VLR_CTB_INT_BSPS
-                                                            ,RG_TRATA_DADOS.IDADE_PROP_BD
-                                                            ,RG_TRATA_DADOS.VLR_CTB_PROP_BD
-                                                            ,RG_TRATA_DADOS.IDADE_INT_BD
-                                                            ,RG_TRATA_DADOS.VLR_CTB_INT_BD
-                                                            ,RG_TRATA_DADOS.IDADE_PROP_CV
-                                                            ,RG_TRATA_DADOS.VLR_CTB_PROP_CV
-                                                            ,RG_TRATA_DADOS.IDADE_INT_CV
-                                                            ,RG_TRATA_DADOS.VLR_CTB_INT_CV
-                                                            ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_1
-                                                            ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_2
-                                                            ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_VOL_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_VOL_PARTI
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_VOL_PARTI
-                                                            ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_VOL_PARTI
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_VOL_PARTI
-                                                            ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_ESPO_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_ESPOPARTI
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_ESPOPARTI
-                                                            ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_ESPOPARTI
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_ESPOPARTI
-                                                            ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_VOL_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_VOL_PATRO
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_VOL_PATRO
-                                                            ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_VOL_PATRO
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_VOL_PATRO
-                                                            ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_SUPL_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_SUPLPATRO
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_SUPLPATRO
-                                                            ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_SUPLPATRO
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_SUPLPATRO
-                                                            ,RG_TRATA_DADOS.DCR_PORT_TOTAL
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_TOT
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_TOT
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_TOT
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_TOT
-                                                            ,RG_TRATA_DADOS.DCR_PORT_ABERTA
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_ABERTA
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_ABERTA
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_ABERTA
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_ABERTA
-                                                            ,RG_TRATA_DADOS.DCR_PORT_FECHADA
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_FECHADA
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FECHADA
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_FECHADA
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FECHADA
-                                                            ,RG_TRATA_DADOS.DCR_PORT_JOIA_ABERTA
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_JOIA_ABERTA
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_JOIA_ABERTA
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_JOIA_ABERTA
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_JOIA_ABERTA
-                                                            ,RG_TRATA_DADOS.DCR_PORT_JOIA_FECHADA
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_JOIA_FECHADA
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_JOIA_FECHADA
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_JOIA_FECHADA
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_JOIA_FECHADA
-                                                            ,RG_TRATA_DADOS.DCR_DISTR_FUND_PREV_PARTIC
-                                                            ,RG_TRATA_DADOS.SLD_INI_DIST_FUND_PREV_PARTI
-                                                            ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PARTI
-                                                            ,RG_TRATA_DADOS.REN_TOT_DIST_FUND_PREV_PARTI
-                                                            ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPARTI
-                                                            ,RG_TRATA_DADOS.DCR_DISTR_FUND_PREV_PATROC
-                                                            ,RG_TRATA_DADOS.SLD_INI_DIST_FUND_PREV_PATRO
-                                                            ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PATRO
-                                                            ,RG_TRATA_DADOS.REN_TOT_DIST_FUND_PREV_PATRO
-                                                            ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPATRO
-                                                            ,RG_TRATA_DADOS.DCR_PORT_FINAL
-                                                            ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_FIM
-                                                            ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FIM
-                                                            ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_FIM
-                                                            ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FIM
-                                                            ,RG_TRATA_DADOS.DCR_SLD_PROJETADO
-                                                            ,RG_TRATA_DADOS.VLR_SLD_PROJETADO
-                                                            ,RG_TRATA_DADOS.VLR_SLD_ADICIONAL
-                                                            ,RG_TRATA_DADOS.VLR_BENEF_ADICIONAL
-                                                            ,RG_TRATA_DADOS.DTA_ULT_ATUAL
-                                                            ,RG_TRATA_DADOS.VLR_CONTRIB_RISCO
-                                                            ,RG_TRATA_DADOS.VLR_CONTRIB_PATRC
-                                                            ,RG_TRATA_DADOS.VLR_CAPIT_SEGURADO
-                                                            ,RG_TRATA_DADOS.VLR_CONTRIB_ADM
-                                                            ,RG_TRATA_DADOS.VLR_CONTRIB_ADM_PATRC
-                                                            ,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PORCETAGEM
-                                                            ,RG_TRATA_DADOS.DTA_ELEGIB_BENEF_PORCETAGEM
-                                                            ,RG_TRATA_DADOS.IDADE_ELEGIB_PORCETAGEM
-                                                            ,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PORCETAGEM
-                                                            ,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO
-                                                            ,RG_TRATA_DADOS.DTA_ELEGIB_BENEF_PRAZO
-                                                            ,RG_TRATA_DADOS.IDADE_ELEGIB_BENEF_PRAZO
-                                                            ,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PRAZO
+            INSERT INTO ATT.FC_PRE_TBL_BASE_EXTRAT_CTB VALUES( RG_TRATA_DADOS.TPO_DADO	
+                                                              ,RG_TRATA_DADOS.COD_EMPRS	
+                                                              ,RG_TRATA_DADOS.NUM_RGTRO_EMPRG	
+                                                              ,RG_TRATA_DADOS.NOM_EMPRG	
+                                                              ,RG_TRATA_DADOS.DTA_EMISS	
+                                                              ,RG_TRATA_DADOS.NUM_FOLHA	
+                                                              ,RG_TRATA_DADOS.DCR_PLANO	
+                                                              ,RG_TRATA_DADOS.PER_INIC_EXTR	
+                                                              ,RG_TRATA_DADOS.PER_FIM_EXTR	
+                                                              ,RG_TRATA_DADOS.DTA_INIC_EXTR	
+                                                              ,RG_TRATA_DADOS.DTA_FIM_EXTR	
+                                                              ,RG_TRATA_DADOS.DCR_SLD_MOV_SALDADO	
+                                                              ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_INIC	
+                                                              ,RG_TRATA_DADOS.CTB_PL_SALDADO_MOV	
+                                                              ,RG_TRATA_DADOS.RENT_PL_SALDADO_MOV	
+                                                              ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_FIM	
+                                                              ,RG_TRATA_DADOS.DCR_SLD_MOV_BD	
+                                                              ,RG_TRATA_DADOS.SLD_PL_BD_INIC	
+                                                              ,RG_TRATA_DADOS.CTB_PL_MOV_BD	
+                                                              ,RG_TRATA_DADOS.RENT_PL_MOV_BD	
+                                                              ,RG_TRATA_DADOS.SLD_PL_BD_MOV_FIM	
+                                                              ,RG_TRATA_DADOS.DCR_SLD_MOV_CV	
+                                                              ,RG_TRATA_DADOS.SLD_PL_CV_MOV_INIC	
+                                                              ,RG_TRATA_DADOS.CTB_PL_MOV_CV	
+                                                              ,RG_TRATA_DADOS.RENT_PL_MOV_CV	
+                                                              ,RG_TRATA_DADOS.SLD_PL_CV_MOV_FIM	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_OBRIG_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_OBRIG_PARTIC	
+                                                              ,RG_TRATA_DADOS.CTB_CTA_OBRIG_PARTIC	
+                                                              ,RG_TRATA_DADOS.RENT_CTA_OBRIG_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_OBRIG_PARTIC_FIM	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_NORM_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_NORM_PATROC	
+                                                              ,RG_TRATA_DADOS.CTB_CTA_NORM_PATROC	
+                                                              ,RG_TRATA_DADOS.RENT_NORM_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_NORM_PATROC_INIC	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_ESPEC_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PARTIC	
+                                                              ,RG_TRATA_DADOS.CTB_CTA_ESPEC_PARTIC	
+                                                              ,RG_TRATA_DADOS.RENT_CTA_ESPEC_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PARTIC_INIC	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_ESPEC_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PATROC	
+                                                              ,RG_TRATA_DADOS.CTB_CTA_ESPEC_PATROC	
+                                                              ,RG_TRATA_DADOS.RENT_CTA_ESPEC_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_CTA_ESPEC_PATROC_INIC	
+                                                              ,RG_TRATA_DADOS.SLD_TOT_INIC	
+                                                              ,RG_TRATA_DADOS.CTB_TOT_INIC	
+                                                              ,RG_TRATA_DADOS.RENT_PERIODO	
+                                                              ,RG_TRATA_DADOS.SLD_TOT_FIM	
+                                                              ,RG_TRATA_DADOS.PRM_MES_PERIODO_CTB	
+                                                              ,RG_TRATA_DADOS.SEG_MES_PERIODO_CTB	
+                                                              ,RG_TRATA_DADOS.TER_MES_PERIODO_CTB	
+                                                              ,RG_TRATA_DADOS.DCR_TOT_CTB_BD	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_BD_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TOT_CTB_CV	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_CV_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_VOL_PARTIC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PARTIC_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_VOL_PATROC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_VOL_PATROC_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_OBRIG_PARTIC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PARTIC_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_OBRIG_PATROC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_OBRIG_PATROC_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_ESPOR_PATROC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PATROC_PERIODO	
+                                                              ,RG_TRATA_DADOS.DCR_TPO_CTB_ESPOR_PARTIC	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_PRM_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_SEG_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_TER_MES	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_ESPOR_PARTIC_PERIODO	
+                                                              ,RG_TRATA_DADOS.TOT_CTB_PRM_MES	
+                                                              ,RG_TRATA_DADOS.TOT_CTB_SEG_MES	
+                                                              ,RG_TRATA_DADOS.TOT_CTB_TER_MES	
+                                                              ,RG_TRATA_DADOS.TOT_CTB_EXTRATO	
+                                                              ,RG_TRATA_DADOS.PRM_MES_PERIODO_RENT	
+                                                              ,RG_TRATA_DADOS.SEG_MES_PERIODO_RENT	
+                                                              ,RG_TRATA_DADOS.TER_MES_PERIODO_RENT	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_REAL_PRM_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_REAL_SEG_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_REAL_TER_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_REAL_TOT_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_LMTD_PRM_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_LMTD_SEG_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_LMTD_TER_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_LMTD_TOT_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_IGPDI_PRM_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_IGPDI_SEG_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TER_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TOT_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_URR_PRM_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_URR_SEG_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_URR_TER_MES	
+                                                              ,RG_TRATA_DADOS.PCT_RENT_URR_TOT_MES	
+                                                              ,RG_TRATA_DADOS.DTA_APOS_PROP	
+                                                              ,RG_TRATA_DADOS.DTA_APOS_INTE	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_PSAP_PROP	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_PSAP_INTE	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_BD_PROP	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_BD_INTE	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_CV_PROP	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_CV_INTE	
+                                                              ,RG_TRATA_DADOS.RENDA_ESTIM_PROP	
+                                                              ,RG_TRATA_DADOS.RENDA_ESTIM_INT	
+                                                              ,RG_TRATA_DADOS.VLR_RESERV_SALD_LQDA	
+                                                              ,RG_TRATA_DADOS.TXT_PRM_MENS	
+                                                              ,RG_TRATA_DADOS.TXT_SEG_MENS	
+                                                              ,RG_TRATA_DADOS.TXT_TER_MENS	
+                                                              ,RG_TRATA_DADOS.TXT_QUA_MENS	
+                                                              ,RG_TRATA_DADOS.IDADE_PROP_BSPS	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_PROP_BSPS	
+                                                              ,RG_TRATA_DADOS.IDADE_INT_BSPS	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_INT_BSPS	
+                                                              ,RG_TRATA_DADOS.IDADE_PROP_BD	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_PROP_BD	
+                                                              ,RG_TRATA_DADOS.IDADE_INT_BD	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_INT_BD	
+                                                              ,RG_TRATA_DADOS.IDADE_PROP_CV	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_PROP_CV	
+                                                              ,RG_TRATA_DADOS.IDADE_INT_CV	
+                                                              ,RG_TRATA_DADOS.VLR_CTB_INT_CV	
+                                                              ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_1	
+                                                              ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_2	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_VOL_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_VOL_PARTI	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_VOL_PARTI	
+                                                              ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_VOL_PARTI	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_VOL_PARTI	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_ESPO_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_ESPOPARTI	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_ESPOPARTI	
+                                                              ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_ESPOPARTI	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_ESPOPARTI	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_VOL_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_VOL_PATRO	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_VOL_PATRO	
+                                                              ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_VOL_PATRO	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_VOL_PATRO	
+                                                              ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_SUPL_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_CTA_APO_INDI_SUPLPATRO	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_APO_INDI_SUPLPATRO	
+                                                              ,RG_TRATA_DADOS.REN_TOT_CTB_APO_INDI_SUPLPATRO	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_APO_INDI_SUPLPATRO	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_TOTAL	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_TOT	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_TOT	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_TOT	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_TOT	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_ABERTA	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_ABERTA	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_ABERTA	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_ABERTA	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_ABERTA	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_FECHADA	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_FECHADA	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FECHADA	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_FECHADA	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FECHADA	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_JOIA_ABERTA	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_JOIA_ABERTA	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_JOIA_ABERTA	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_JOIA_ABERTA	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_JOIA_ABERTA	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_JOIA_FECHADA	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_JOIA_FECHADA	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_JOIA_FECHADA	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_JOIA_FECHADA	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_JOIA_FECHADA	
+                                                              ,RG_TRATA_DADOS.DCR_DISTR_FUND_PREV_PARTIC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_DIST_FUND_PREV_PARTI	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PARTI	
+                                                              ,RG_TRATA_DADOS.REN_TOT_DIST_FUND_PREV_PARTI	
+                                                              ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPARTI	
+                                                              ,RG_TRATA_DADOS.DCR_DISTR_FUND_PREV_PATROC	
+                                                              ,RG_TRATA_DADOS.SLD_INI_DIST_FUND_PREV_PATRO	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PATRO	
+                                                              ,RG_TRATA_DADOS.REN_TOT_DIST_FUND_PREV_PATRO	
+                                                              ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPATRO	
+                                                              ,RG_TRATA_DADOS.DCR_PORT_FINAL	
+                                                              ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_FIM	
+                                                              ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FIM	
+                                                              ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_FIM	
+                                                              ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FIM	
+                                                              ,RG_TRATA_DADOS.DCR_SLD_PROJETADO	
+                                                              ,RG_TRATA_DADOS.VLR_SLD_PROJETADO	
+                                                              ,RG_TRATA_DADOS.VLR_SLD_ADICIONAL	
+                                                              ,RG_TRATA_DADOS.VLR_BENEF_ADICIONAL	
+                                                              ,RG_TRATA_DADOS.DTA_ULT_ATUAL	
+                                                              ,RG_TRATA_DADOS.VLR_CONTRIB_RISCO	
+                                                              ,RG_TRATA_DADOS.VLR_CONTRIB_PATRC	
+                                                              ,RG_TRATA_DADOS.VLR_CAPIT_SEGURADO	
+                                                              ,RG_TRATA_DADOS.VLR_CONTRIB_ADM	
+                                                              ,RG_TRATA_DADOS.VLR_CONTRIB_ADM_PATRC	
+                                                              ,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PORCETAGEM	
+                                                              ,RG_TRATA_DADOS.DTA_ELEGIB_BENEF_PORCETAGEM	
+                                                              ,RG_TRATA_DADOS.IDADE_ELEGIB_PORCETAGEM	
+                                                              ,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PORCETAGEM	
+                                                              ,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO	
+                                                              ,RG_TRATA_DADOS.DTA_ELEGIB_BENEF_PRAZO	
+                                                              ,RG_TRATA_DADOS.IDADE_ELEGIB_BENEF_PRAZO	
+                                                              ,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PRAZO
                                                             );
          IF SQL%ROWCOUNT > 0 THEN                                                                                                                                
               V_COUNT := V_COUNT + 1;                                                                                                                                                         
@@ -765,25 +770,25 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                    
       END LOOP;
       
-      IF V_COUNT = V_CONT_TEMP THEN -->  1478 TESTE
+      IF V_COUNT = V_CONT_TEMP THEN -->  1478 TESTE 
            R_VALIDA:= TRUE;    
         RETURN R_VALIDA;        
          COMMIT;
-		 
+       
       ELSE
-        RETURN R_VALIDA := FALSE;       
-         ROLLBACK;
+         RETURN R_VALIDA;       
+       ROLLBACK;
        
       END IF; 
-        DBMS_OUTPUT.PUT_LINE('TOTAL DE REGISTROS INSERIDO: '||V_COUNT);
-             
+      
+        DBMS_OUTPUT.PUT_LINE('TOTAL DE REGISTROS INSERIDO: '||V_COUNT);             
       --
-    EXCEPTION    
-      WHEN OTHERS THEN
-      DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
-      DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-      RETURN FALSE;
-        NULL;
+      EXCEPTION    
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
+         RETURN FALSE;
+         NULL;
     END FN_TRATA_ARQUIVO;
     
        -- -------------------------------------------------------------------------------------------
@@ -971,8 +976,11 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         EXCEPTION
           WHEN OTHERS THEN
             --RETURN NULL;
-            DBMS_OUTPUT.put_line(SQLCODE || ' - ' || SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
         END FUN_CALC_VLR;
+        
+        
         
    -- PATROCINADORA: PSAP/TIETE
    PROCEDURE PROC_EXT_PREV_TIETE(P_COD_EMPRESA   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE,
@@ -1082,8 +1090,6 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
            DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
            DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
 
-
-
    END PROC_EXT_PREV_TIETE;
    --
    --   
@@ -1157,13 +1163,15 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
       LOOP
         L_C_INS := L_C_INS + 1;
         --
-        TB_REC_BASE.VLR_BENEF_BD_INTE   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 1, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DR
-        TB_REC_BASE.RENDA_ESTIM_PROP    := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 2, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM);         -- VLR_DU
-        TB_REC_BASE.RENDA_ESTIM_INT     := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 3, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM);         -- VLR_DV
+        
+/*        TB_REC_BASE.VLR_BENEF_BD_INTE   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 1, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DR
+        TB_REC_BASE.RENDA_ESTIM_PROP    := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 2, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DU
+        TB_REC_BASE.RENDA_ESTIM_INT     := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 3, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DV
         TB_REC_BASE.VLR_CTB_INT_BD      := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE); -- EI
         TB_REC_BASE.VLR_CTB_PROP_BD     := 0;                                                           -- EG
-        TB_REC_BASE.VLR_SLD_ADICIONAL   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 4, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM);         -- RES3
-        TB_REC_BASE.VLR_BENEF_ADICIONAL := TB_REC_BASE.VLR_SLD_ADICIONAL / 130;                         -- RES4
+        TB_REC_BASE.VLR_SLD_ADICIONAL   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 4, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- RES3
+        TB_REC_BASE.VLR_BENEF_ADICIONAL := TB_REC_BASE.VLR_SLD_ADICIONAL / 130;                         -- RES4*/
+        
         --
         UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB A
            SET  VLR_BENEF_BD_PROP   = 0
@@ -1195,16 +1203,17 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
   END PRE_PRC_EXT_PREV_ELETROPAULO;
 
-  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
-                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL)
+
+  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
+                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE)
   IS
-  
-  VAR_TESTE BOOLEAN;
+   
+  --VAR_TESTE BOOLEAN;
   
   BEGIN
-  
-  VAR_TESTE := FN_TRATA_ARQUIVO;
-/*     IF (P_PRC_PROCESSO = 1) THEN
+   --VAR_TESTE := FN_TRATA_ARQUIVO;
+      
+     IF (P_PRC_PROCESSO = 1) THEN
         --
         PRE_PRC_EXT_PREV_ELETROPAULO(40,'PSAP/ELETROPAULO', P_PRC_DATA); -- ELETROPAULO
         --
@@ -1220,7 +1229,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         --
         DBMS_OUTPUT.PUT_LINE('4');
         --
-      END IF;*/
+      END IF;
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;

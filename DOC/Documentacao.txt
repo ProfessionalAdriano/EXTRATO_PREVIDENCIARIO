@@ -15,3 +15,15 @@ ftp:\\fcesphorad001
 usuario: integ
 senha: newdev
 
+
+----
+----
+23/04/2021
+
+Concluído o cursor que trata os dados e grava na tabela.(Com isso se elimina o IntegWeb e o Charger)...
+
+Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de dados(Falar com a Fábia)...
+
+
+
+
