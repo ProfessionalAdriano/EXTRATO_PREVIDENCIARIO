@@ -1,19 +1,90 @@
+CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
+
+ -- VARIAVEIS
+  G_HOST_NAME    VARCHAR2(64);
+  
+  G_MODULE       VARCHAR2(255) := '';
+  G_OS_USER      VARCHAR2(255) := '';
+  G_TERMINAL     VARCHAR2(255) := '';
+  G_CURRENT_USER VARCHAR2(255) := '';
+  G_IP_ADDRESS   VARCHAR2(255) := '';
+
+  G_ARQ       UTL_FILE.FILE_TYPE;
+  G_REGISTRO  CLOB;
+  G_SEPARADOR CHAR(1)  := ';';
+  G_TABLE VARCHAR2(50) := 'FC_PRE_TBL_BASE_EXTRAT_CTB';
+  G_PATH VARCHAR2(255);
+  G_NAME VARCHAR2(255) := 'GeracaoExtratoCorreio_440_031_012021.txt';
+  G_DIR VARCHAR2(50)   := 'DIR_WORK';
+  G_OWNER VARCHAR2(50) := 'ATT';
+  --
+  G_DDL_CREATE_TABLE VARCHAR2(5000) := 'CREATE TABLE F02860.EXT_TB_';
+  G_DDL_COLUMNN_TABLE CLOB := EMPTY_CLOB(); --VARCHAR2(25000) := '';
+  G_SQL VARCHAR2(30000) := '';
+  L_LEN NUMBER := 0;
+  G_EXT_CONST VARCHAR2(1000) := ' ORGANIZATION EXTERNAL ( '        || CHR(13) ||
+                                ' TYPE ORACLE_LOADER '             || CHR(13) ||
+                                ' DEFAULT DIRECTORY '              || G_DIR   || CHR(13) ||
+                                ' ACCESS PARAMETERS ( '            || CHR(13) ||
+                                ' RECORDS DELIMITED BY NEWLINE '   || CHR(13) ||
+                                ' FIELDS TERMINATED BY '''''       || G_SEPARADOR || '''''' || CHR(13) ||
+                                ' MISSING FIELD VALUES ARE NULL) ' || CHR(13) ||
+                                ' LOCATION (<FILENAME>) '          || CHR(13) ||
+                                ')'                                || CHR(13) ||
+                                ' PARALLEL 5 '                     || CHR(13) ||
+                                ' REJECT LIMIT UNLIMITED';
+
+    --FUNCTION FN_CARGA_ARQUIVO RETURN BOOLEAN;
+
+    PROCEDURE PRC_GRAVA_LOG ( P_COD_LOG_CARGA_EXTRATO NUMBER    DEFAULT NULL
+                             ,P_TPO_DADO              NUMBER    DEFAULT NULL
+                             ,P_COD_EMPRS             NUMBER    DEFAULT NULL
+                             ,P_NUM_RGTRO_EMPRG       VARCHAR2  DEFAULT NULL
+                             ,P_DTA_FIM_EXTR          DATE      DEFAULT NULL
+                             ,P_QTD_LINHAS            NUMBER    DEFAULT NULL
+                             ,P_DT_INCLUSAO           TIMESTAMP DEFAULT NULL
+                             ,P_STATUS                CHAR      DEFAULT NULL
+                             ,P_OBSERVACAO            VARCHAR2  DEFAULT NULL
+                             ,P_MODULE                VARCHAR2  DEFAULT NULL
+                             ,P_OS_USER               VARCHAR2  DEFAULT NULL
+                             ,P_TERMINAL              VARCHAR2  DEFAULT NULL
+                             ,P_CURRENT_USER          VARCHAR2  DEFAULT NULL
+                             ,P_IP_ADDRESS            VARCHAR2  DEFAULT NULL
+                           );    
+    
+    PROCEDURE PRC_CARGA_ARQUIVO;    
+
+    PROCEDURE PROC_EXT_PREV_TIETE(P_COD_EMPRESA   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE,
+                                  P_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE,
+                                  P_DTA_MOV       ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+
+  PROCEDURE PRE_PRC_EXT_PREV_ELETROPAULO(PCOD_EMPRESA ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE,
+                                         PDCR_PLANO   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE,
+                                         PDTA_MOV     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+   --PROCEDURE PRE_PRC_EXTRATOATUALIZA;
+   
+  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL
+                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+   --E_NOT_EXIST           EXCEPTION;
+   --E_ERROR_CARGA_ARQUIVO EXCEPTION;
+
+   --C_DESC_PLANO_ELETROPAULO VARCHAR2(1000) := 'PSAP/ELETROPAULO';
+ 
+END PKG_EXT_PREVIDENCIARIO;
+/
 CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- SISTEMA     : AMADEUS CAPITALIZACAO
--- DESCRICAO   : EM VIRTUDE DO SALDAMENTO DO PLANO PSAP/ELETROPAULO (PLANO 19), O EXTRATO PREVIDENCIARIO PRECISARA PASSAR POR ALTERACOES
+-- DESCRICAO   : GERACAO DOS EXTRATO PREVIDENCIARIO DOS SALDADOS - PSAP/ELETROPAULO, TIM, PSAP/TIETE
 -- ANALISTA    : ADRIANO LIMA
--- DATA CRIACAO: 23/11/2020
--- MANUTENCOES : PROJ-760/PSD-11865 - DATA: 23/11/2020 ¿ ANALISTA: ADRIANO LIMA/RENATO DAVI
-
--- MANUTENCOES : PROJ-3677 - DATA: 02/02/2021 ¿ ANALISTA: ADRIANO LIMA - DESCRICAO: EXECUTAR A PROCEDURE PARA AJUSTES DO EXTRATO PREVIDENCIARIO:
---               ESSA MANUTENCAO CONSISTE EM INSERIR O BDS NO EXTRATO PREVIDENCIARIO (19 PSAP/Eletropaulo)             
-
--- MANUTENCOES : PSD-32395 - DATA: 09/03/2021 ANALISTA ADRIANO LIMA CRIACAO DA PROCEDURE PROC_EXT_PREV_TIETE
---               ESSA MANUTENCAO CONSISTE EM INSERIR O BDS NO EXTRATO PREVIDENCIARIO (31 PSAP/TIETE)
+-- DATA CRIACAO: 26/04/2021
+-- MANUTENCOES : 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                           
-/*
+
     PROCEDURE PRC_INICIALIZA_VARIAVEIS IS
     
     BEGIN
@@ -93,6 +164,33 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        );
     END PRC_GRAVA_LOG;
     
+    PROCEDURE PRC_CARGA_ARQUIVO IS 
+      
+    BEGIN
+      G_ARQ := UTL_FILE.FOPEN(G_DIR,G_NAME,'R');
+    
+       LOOP
+         UTL_FILE.GET_LINE(G_ARQ,G_REGISTRO);
+         DBMS_OUTPUT.PUT_LINE(G_REGISTRO); -- ora-29289 acesso ao diretorio negado...
+                                           ---29289 - MSG: ORA-29289: directory access denied       
+       END LOOP;
+       
+        EXCEPTION
+           WHEN NO_DATA_FOUND THEN
+              UTL_FILE.FCLOSE(G_ARQ);
+              DBMS_OUTPUT.PUT_LINE('Arquivo G_NAME lido com sucesso!');
+             
+           WHEN UTL_FILE.INVALID_PATH THEN
+                UTL_FILE.FCLOSE(G_ARQ); 
+            
+           WHEN OTHERS THEN
+                UTL_FILE.FCLOSE(G_ARQ); 
+                DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
+                DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);         
+         
+     
+    END PRC_CARGA_ARQUIVO;
+/*    
     FUNCTION FN_VALIDA_TABELA( P_FN_TABELA VARCHAR2
                               ,P_FN_OWNER  VARCHAR2 ) RETURN BOOLEAN IS
       L_EXIST NUMBER;
@@ -281,9 +379,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         R_RETURN_CARGA := FALSE;
       
     END FN_CARGA_ARQUIVO;
-    
-    
 */    
+    
+    
     -- PROCEDURE PRC_TRATA_ARQUIVO
     FUNCTION FN_TRATA_ARQUIVO
       RETURN BOOLEAN
@@ -795,17 +893,17 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
        -- FUN_CALC_VLR
        -- Descricao: 
        -- -------------------------------------------------------------------------------------------    
-       FUNCTION FUN_CALC_VLR(  P_NUM_MATR  ATT.HIST_VALOR_BNF.NUM_MATR_PARTF          %TYPE
+       FUNCTION FUN_CALC_VLR(  P_NUM_MATR  ATT.HIST_VALOR_BNF.NUM_MATR_PARTF%TYPE
                               ,P_DTA_FIM   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE
-                              ,P_NUM_PLBNF ATT.HIST_VALOR_BNF.NUM_PLBNF               %TYPE DEFAULT NULL
+                              ,P_NUM_PLBNF ATT.HIST_VALOR_BNF.NUM_PLBNF%TYPE DEFAULT NULL
                               ,P_DESC_PLBNF ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
                               ,P_CALC      NUMBER
                                --
                               ,P_COD_EMPRS  ATT.EMPRESA.COD_EMPRS%TYPE
-                              --,P_DT_MOV     DATE
-                              ,P_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE
-                              ,P_NUM_CTFSS  ATT.SLD_CONTA_PARTIC_FSS.NUM_CTFSS%TYPE
-                              ,P_COD_UM     ATT.SLD_CONTA_PARTIC_FSS.COD_UM%TYPE
+                              ,P_DT_MOV     DATE
+                              ,P_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE DEFAULT NULL
+                              ,P_NUM_CTFSS  ATT.SLD_CONTA_PARTIC_FSS.NUM_CTFSS%TYPE DEFAULT NULL
+                              ,P_COD_UM     ATT.SLD_CONTA_PARTIC_FSS.COD_UM%TYPE DEFAULT NULL
                             )
         RETURN NUMBER IS
           R_VLR_BENEF1       ATT.HIST_VALOR_BNF.VLR_BENEF1_HTBNF%TYPE;
@@ -815,170 +913,186 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
           R_RES2             ATT.COTACAO_DIA_UM.VLR_CDIAUM%TYPE;
           R_RES3             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SLD_ADICIONAL%TYPE;
           --
-              R_VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE;
-              R_VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE;
-              --R_RENDA_ESTIM_PROP    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_PROP%TYPE;
-              --R_RENDA_ESTIM_INT     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_INT%TYPE;          
+          R_VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE;
+          R_VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE;        
+          
+
         BEGIN
           --
-          IF P_COD_EMPRS IN (40, 60) THEN
-            -- CALCULO PARA AS EMPRESAS: ELETROPAULO/TIM
+          --
+          -- CALCULO PARA AS EMPRESAS: ELETROPAULO/TIM
+          IF (P_COD_EMPRS IN (40, 60) ) THEN
+                      
+                IF (P_CALC = 1) THEN
+                  -- CALCULA VLR_DR
+                  --
+                  SELECT NVL(MAX(VLR_BENEF1_HTBNF),0)
+                    INTO R_VLR_BENEF1
+                    FROM HIST_VALOR_BNF
+                   WHERE NUM_MATR_PARTF = P_NUM_MATR
+                     AND COD_NATBNF     = P_COD_NATBNF -- 4
+                     AND NUM_PLBNF      = P_NUM_PLBNF
+                     AND TO_CHAR(DAT_INIVG_HTBNF,'YYYYMM') = TO_CHAR(P_DTA_FIM,'YYYYMM');            
+
+                  IF (R_VLR_BENEF1 IS NOT NULL) THEN
+                    RETURN R_VLR_BENEF1;
+                  END IF;
+                  --
+                ELSIF (P_CALC = 2) THEN
+                  -- CALCULA VLR_DU
+                  --
+                  SELECT NVL(SUM(VLR_BENEF_PSAP_PROP + VLR_BENEF_BD_PROP + VLR_BENEF_CV_PROP),0)
+                    INTO R_RENDA_ESTIM_PROP
+                    FROM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB P
+                   INNER JOIN ATT.PARTICIPANTE_FSS      Y  ON Y.COD_EMPRS       = P.COD_EMPRS
+                                                          AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(P.NUM_RGTRO_EMPRG,1,LENGTH(P.NUM_RGTRO_EMPRG) - 2))
+                   WHERE P.COD_EMPRS        = P_COD_EMPRS
+                     AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
+                     AND P.DTA_FIM_EXTR     = P_DTA_FIM
+                     AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
+                     
+                  IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
+                    RETURN R_RENDA_ESTIM_PROP;
+                  END IF;
+                  --
+                ELSIF (P_CALC = 3) THEN
+                  -- CALCULA VLR_DV
+                  --
+                  SELECT NVL(SUM(VLR_BENEF_PSAP_INTE + VLR_BENEF_BD_INTE + VLR_BENEF_CV_INTE),0)
+                    INTO R_RENDA_ESTIM_INT
+                    FROM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB P
+                   INNER JOIN ATT.PARTICIPANTE_FSS           Y  ON Y.COD_EMPRS       = P.COD_EMPRS
+                                                               AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(P.NUM_RGTRO_EMPRG,1,LENGTH(P.NUM_RGTRO_EMPRG) - 2))
+                   WHERE P.COD_EMPRS        = P_COD_EMPRS
+                     AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
+                     AND P.DTA_FIM_EXTR     = P_DTA_FIM
+                     AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
+                     
+                  IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
+                    RETURN R_RENDA_ESTIM_INT;
+                  END IF;
+                  --
+                ELSE
+                  --
+                  SELECT NVL(SUM(SCPF.VLR_SDANT_SDCTPR + SCPF.VLR_ENTMES_SDCTPR - SCPF.VLR_SAIMES_SDCTPR),0) AS VLR_RES1
+                    INTO R_RES1
+                    FROM  ATT.SLD_CONTA_PARTIC_FSS    SCPF
+                         ,ATT.PARTICIPANTE_FSS        PF  
+                         ,ATT.ADESAO_PLANO_PARTIC_FSS APPF
+                         ,ATT.CONTA_FSS               CF  
+                   WHERE SCPF.NUM_MATR_PARTF = PF.NUM_MATR_PARTF
+                     AND SCPF.NUM_CTFSS      = CF.NUM_CTFSS
+                     AND SCPF.COD_UM         = CF.COD_UMARMZ_CTFSS
+                     AND PF.NUM_MATR_PARTF   = APPF.NUM_MATR_PARTF
+                     --
+                     AND APPF.NUM_PLBNF  = P_NUM_PLBNF -- 19
+                     AND SCPF.NUM_CTFSS  = P_NUM_CTFSS -- 976
+                     AND SCPF.COD_UM     = P_COD_UM    -- 248
+                     AND PF.COD_EMPRS    = P_COD_EMPRS -- IN (40,60)
+                     AND SCPF.ANOMES_MOVIM_SDCTPR = TO_NUMBER(TRUNC(TO_CHAR(P_DTA_FIM,'YYYYMM')));
+                  --
+                  --
+                  
+                  
+               /*   SELECT NVL(MAX(A.VLR_CDIAUM),0) AS VLR_CDIAUM
+                    INTO R_RES2
+                    FROM COTACAO_DIA_UM A
+                   WHERE A.COD_UM     = P_COD_UM -- 248
+                     AND A.DAT_CDIAUM = TO_DATE(TRUNC(P_DTA_FIM));
+                   
+                  IF (     R_RES1 IS NOT NULL
+                       AND R_RES2 IS NOT NULL ) THEN
+                    R_RES3 := ROUND(R_RES1 * R_RES2);
+                    RETURN NVL(R_RES3,0);
+                  END IF;*/
+                  
+                  SELECT MAX(VLR_CDIAUM)AS VLR_CDIAUM
+                    INTO R_RES2
+                    FROM COTACAO_DIA_UM
+                    WHERE COD_UM = 248
+                    AND DAT_CDIAUM = (SELECT MAX(DAT_CDIAUM)
+                                        FROM COTACAO_DIA_UM
+                                       WHERE DAT_CDIAUM BETWEEN TO_DATE('01/'||TO_CHAR(P_DTA_FIM,'MM/RRRR'),'DD/MM/RRRR') 
+                                                         AND TO_DATE(LAST_DAY(P_DTA_FIM),'DD/MM/RRRR')
+                                                         AND COD_UM = 248);
+                                      
+                      IF (     R_RES1 IS NOT NULL
+                         AND R_RES2 IS NOT NULL ) THEN
+                      R_RES3 := ROUND(R_RES1 * R_RES2);
+                      RETURN NVL(R_RES3,0);
+                    END IF;                                                       
+                  
+                END IF;
+              --
+              --
+            -- CALCULO PARA A EMPRESA: TIETE
             
-            IF (P_CALC = 1) THEN
-              -- CALCULA VLR_DR
+           ELSIF (P_COD_EMPRS IN (44) ) THEN
+               --DBMS_OUTPUT.PUT_LINE('PATROCINADO TIETE');
+           
+                
+              IF (P_CALC = 1) THEN -- Valor do BDS - Modulo Saldado:              
+              -- CALCULA VLR_BENEF_BD_INTE
               --
-              SELECT NVL(MAX(VLR_BENEF1_HTBNF),0)
-                INTO R_VLR_BENEF1
-                FROM HIST_VALOR_BNF
-               WHERE NUM_MATR_PARTF = P_NUM_MATR
-                 AND COD_NATBNF     = P_COD_NATBNF -- 4
-                 AND NUM_PLBNF      = P_NUM_PLBNF
-                 AND TO_CHAR(DAT_INIVG_HTBNF,'YYYYMM') = TO_CHAR(P_DTA_FIM,'YYYYMM');            
+                SELECT NVL(BS.VLR_BNF1TT_BNFSLD,0)
+                   INTO R_VLR_BENEF_BD_INTE
+                  FROM ATT.BENEFICIO_SALDADO BS
+                  INNER JOIN ATT.PARTICIPANTE_FSS P
+                                              ON (P.NUM_MATR_PARTF = BS.NUM_MATR_PARTF)
+                WHERE P.NUM_MATR_PARTF = P_NUM_MATR   
+                AND   BS.NUM_PLBNF     = P_NUM_PLBNF;  
 
-              IF (R_VLR_BENEF1 IS NOT NULL) THEN
-                RETURN R_VLR_BENEF1;
-              END IF;
+                IF (R_VLR_BENEF_BD_INTE IS NOT NULL) THEN
+                  RETURN R_VLR_BENEF_BD_INTE;
+                END IF;
+
+              ELSIF (P_CALC = 2) THEN -- Valor Total dos Beneficios:
+              --RENDA_ESTIM_PROP
               --
-            ELSIF (P_CALC = 2) THEN
-              -- CALCULA VLR_DU
+                SELECT NVL(SUM(FPT.VLR_BENEF_PSAP_PROP + FPT.VLR_BENEF_BD_PROP + FPT.VLR_BENEF_CV_PROP),0) AS RENDA_ESTIM_PROP
+                   INTO R_RENDA_ESTIM_PROP
+                  FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
+                   INNER JOIN ATT.PARTICIPANTE_FSS Y ON Y.COD_EMPRS = FPT.COD_EMPRS
+                                          AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
+                       WHERE FPT.COD_EMPRS        = P_COD_EMPRS 
+                         AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   
+                         AND Y.NUM_MATR_PARTF     = P_NUM_MATR    
+                         AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     
+
+                IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
+                  RETURN R_RENDA_ESTIM_PROP;
+                END IF;
+
+              ELSIF (P_CALC = 3)THEN -- Valor Total dos Beneficios:
+              --RENDA_ESTIM_INT
               --
-              SELECT NVL(SUM(VLR_BENEF_PSAP_PROP + VLR_BENEF_BD_PROP + VLR_BENEF_CV_PROP),0)
-                INTO R_RENDA_ESTIM_PROP
-                FROM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB P
-               INNER JOIN ATT.PARTICIPANTE_FSS      Y  ON Y.COD_EMPRS       = P.COD_EMPRS
-                                                      AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(P.NUM_RGTRO_EMPRG,1,LENGTH(P.NUM_RGTRO_EMPRG) - 2))
-               WHERE P.COD_EMPRS        = P_COD_EMPRS
-                 AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
-                 AND P.DTA_FIM_EXTR     = P_DTA_FIM
-                 AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
-                 
-              IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
-                RETURN R_RENDA_ESTIM_PROP;
-              END IF;
-              --
-            ELSIF (P_CALC = 3) THEN
-              -- CALCULA VLR_DV
-              --
-              SELECT NVL(SUM(VLR_BENEF_PSAP_INTE + VLR_BENEF_BD_INTE + VLR_BENEF_CV_INTE),0)
-                INTO R_RENDA_ESTIM_INT
-                FROM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB P
-               INNER JOIN ATT.PARTICIPANTE_FSS           Y  ON Y.COD_EMPRS       = P.COD_EMPRS
-                                                           AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(P.NUM_RGTRO_EMPRG,1,LENGTH(P.NUM_RGTRO_EMPRG) - 2))
-               WHERE P.COD_EMPRS        = P_COD_EMPRS
-                 AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
-                 AND P.DTA_FIM_EXTR     = P_DTA_FIM
-                 AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
-                 
-              IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
-                RETURN R_RENDA_ESTIM_INT;
-              END IF;
-              --
-            ELSE
-              --
-              SELECT NVL(SUM(SCPF.VLR_SDANT_SDCTPR + SCPF.VLR_ENTMES_SDCTPR - SCPF.VLR_SAIMES_SDCTPR),0) AS VLR_RES1
-                INTO R_RES1
-                FROM  ATT.SLD_CONTA_PARTIC_FSS    SCPF
-                     ,ATT.PARTICIPANTE_FSS        PF  
-                     ,ATT.ADESAO_PLANO_PARTIC_FSS APPF
-                     ,ATT.CONTA_FSS               CF  
-               WHERE SCPF.NUM_MATR_PARTF = PF.NUM_MATR_PARTF
-                 AND SCPF.NUM_CTFSS      = CF.NUM_CTFSS
-                 AND SCPF.COD_UM         = CF.COD_UMARMZ_CTFSS
-                 AND PF.NUM_MATR_PARTF   = APPF.NUM_MATR_PARTF
-                 --
-                 AND APPF.NUM_PLBNF  = P_NUM_PLBNF -- 19
-                 AND SCPF.NUM_CTFSS  = P_NUM_CTFSS -- 976
-                 AND SCPF.COD_UM     = P_COD_UM    -- 248
-                 AND PF.COD_EMPRS    = P_COD_EMPRS -- IN (40,60)
-                 AND SCPF.ANOMES_MOVIM_SDCTPR = TO_NUMBER(TRUNC(TO_CHAR(P_DTA_FIM,'YYYYMM')));
-              --
-              SELECT NVL(MAX(A.VLR_CDIAUM),0) AS VLR_CDIAUM
-                INTO R_RES2
-                FROM COTACAO_DIA_UM A
-               WHERE A.COD_UM     = P_COD_UM -- 248
-                 AND A.DAT_CDIAUM = TO_DATE(TRUNC(P_DTA_FIM));
-               
-              IF (     R_RES1 IS NOT NULL
-                   AND R_RES2 IS NOT NULL ) THEN
-                R_RES3 := ROUND(R_RES1 * R_RES2);
-                RETURN NVL(R_RES3,0);
-              END IF;
-            END IF;
-            --
-         ELSE
-           -- CALCULO PARA A EMPRESA: TIETE
-            IF (P_CALC = 1) THEN -- Valor do BDS - Modulo Saldado:                
-              -- CALCULA VLR_BENEF_BD_PROP
-              --
-              SELECT REPLACE(FPT.VLR_BENEF_BD_PROP,FPT.VLR_BENEF_BD_PROP,0)AS VLR_BENEF_BD_PROP
-                 INTO R_VLR_BENEF_BD_PROP
-                FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
-               WHERE DCR_PLANO          = P_DESC_PLBNF    --'PSAP/Eletropaulo'
-                AND FPT.DTA_FIM_EXTR    = P_DTA_FIM      --TO_DATE('31/12/2020','DD/MM/RRRR')
-                AND FPT.NUM_RGTRO_EMPRG = P_NUM_MATR     --'0000096920-7' -- EXEMPLO DE TESTE --> Livia Nascimento Silva
-                AND FPT.COD_EMPRS       = P_COD_EMPRS;  --44
+                SELECT NVL(SUM(FPT.VLR_BENEF_PSAP_INTE + FPT.VLR_BENEF_BD_INTE + FPT.VLR_BENEF_CV_INTE),0) AS RENDA_ESTIM_PROP
+                  INTO R_RENDA_ESTIM_INT
+                 FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
+                   INNER JOIN ATT.PARTICIPANTE_FSS Y  ON Y.COD_EMPRS = FPT.COD_EMPRS
+                                          AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
+                         WHERE FPT.COD_EMPRS        = P_COD_EMPRS 
+                           AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   
+                           AND Y.NUM_MATR_PARTF     = P_NUM_MATR    
+                           AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     
 
-              IF (R_VLR_BENEF_BD_PROP IS NOT NULL) THEN
-                RETURN  R_VLR_BENEF_BD_PROP;
-              END IF;
-
-            ELSIF (P_CALC = 2) THEN -- Valor do BDS - Modulo Saldado:              
-            -- CALCULA VLR_BENEF_BD_INTE
-            --
-              SELECT BS.VLR_BNF1TT_BNFSLD
-                 INTO R_VLR_BENEF_BD_INTE
-                FROM ATT.BENEFICIO_SALDADO BS
-                INNER JOIN ATT.PARTICIPANTE_FSS P
-                                            ON (P.NUM_MATR_PARTF = BS.NUM_MATR_PARTF)
-              WHERE P.NUM_MATR_PARTF = P_NUM_MATR   --91687
-              AND   BS.NUM_PLBNF     = P_NUM_PLBNF;  --31;
-
-              IF (R_VLR_BENEF_BD_INTE IS NOT NULL) THEN
-                RETURN R_VLR_BENEF_BD_INTE;
-              END IF;
-
-            ELSIF (P_CALC = 3) THEN -- Valor Total dos Beneficios:
-            --RENDA_ESTIM_PROP
-            --
-              SELECT NVL(SUM(FPT.VLR_BENEF_PSAP_PROP + FPT.VLR_BENEF_BD_PROP + FPT.VLR_BENEF_CV_PROP),0) AS RENDA_ESTIM_PROP
-                 INTO R_RENDA_ESTIM_PROP
-                FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
-                 INNER JOIN ATT.PARTICIPANTE_FSS Y ON Y.COD_EMPRS = FPT.COD_EMPRS
-                                        AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
-                     WHERE FPT.COD_EMPRS        = P_COD_EMPRS --44
-                       AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   --UPPER('PSAP/Eletropaulo) -- Tim
-                       AND Y.NUM_MATR_PARTF     = P_NUM_MATR    --91687
-                       AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     --TO_DATE('31/12/2020','DD/MM/YYYY');
-
-              IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
-                RETURN R_RENDA_ESTIM_PROP;
-              END IF;
-
-            ELSE --(P_CALC = 4)THEN -- Valor Total dos Beneficios:
-            --RENDA_ESTIM_INT
-            --
-              SELECT NVL(SUM(FPT.VLR_BENEF_PSAP_INTE + FPT.VLR_BENEF_BD_INTE + FPT.VLR_BENEF_CV_INTE),0) AS RENDA_ESTIM_PROP
-                INTO R_RENDA_ESTIM_INT
-               FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
-                 INNER JOIN ATT.PARTICIPANTE_FSS Y  ON Y.COD_EMPRS = FPT.COD_EMPRS
-                                        AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
-                       WHERE FPT.COD_EMPRS        = P_COD_EMPRS --44
-                         AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   --UPPER('PSAP/Eletropaulo') Tim
-                         AND Y.NUM_MATR_PARTF     = P_NUM_MATR    --91687
-                         AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     --TO_DATE('31/12/2020','DD/MM/YYYY');
-
-              IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
-                RETURN R_RENDA_ESTIM_INT;
-              END IF;
-
-            END IF;
-         END IF;
-        EXCEPTION
-          WHEN OTHERS THEN
-            --RETURN NULL;
-            DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
-            DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-        END FUN_CALC_VLR;
+                IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
+                  RETURN R_RENDA_ESTIM_INT;
+                END IF;
+                
+                ELSE
+                 DBMS_OUTPUT.PUT_LINE('------------------');               
+                END IF;           
+           
+           -- AQUI SERA IMPLEMENTADO A REGRA PARA A NOVA PATROCINADORA...
+          END IF;
+          
+          EXCEPTION
+            WHEN OTHERS THEN
+              RETURN NULL;
+              DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
+              DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
+          END FUN_CALC_VLR;
         
         
         
@@ -991,7 +1105,6 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         DECLARE
 
            L_DTA_FIM     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
-           --L_NUM_PLBNF   ATT.BENEFICIO_SALDADO.NUM_PLBNF%TYPE:=31;
 
          TYPE REC_BASE IS RECORD(   VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE
                                    ,VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE
@@ -1019,22 +1132,22 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                 FROM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB X
                INNER JOIN ATT.PARTICIPANTE_FSS           Y  ON Y.COD_EMPRS = X.COD_EMPRS
                                                      AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(X.NUM_RGTRO_EMPRG,1,LENGTH(X.NUM_RGTRO_EMPRG) - 2))
-               WHERE X.COD_EMPRS        = P_CR_CODEMPRS
-                 AND UPPER(X.DCR_PLANO) = UPPER(P_CR_DCR_PLANO)
-                 --AND Y.NUM_MATR_PARTF   = 91687
-                 AND X.DTA_FIM_EXTR     = P_DTA_FIM;
+               WHERE X.COD_EMPRS        = P_COD_EMPRESA
+                 AND UPPER(X.DCR_PLANO) = UPPER(P_DCR_PLANO)
+                 --AND Y.NUM_MATR_PARTF = 91687
+                 AND X.DTA_FIM_EXTR     = P_DTA_MOV;
 
 
       BEGIN
 
-            IF (P_DTA_MOV IS NULL)THEN
+            IF (P_DTA_MOV IS NULL)THEN 
             -- FC_PRE_TBL_BASE_EXTRAT_CTB
             -- PEGA MAIOR DATA
             SELECT MAX(DTA_FIM_EXTR)AS DTA_FIM_EXTR
                INTO L_DTA_FIM
                FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
-             WHERE COD_EMPRS        = P_COD_EMPRESA --44
-              AND UPPER(DCR_PLANO)  = P_DCR_PLANO;   --UPPER('PSAP/Eletropaulo')
+             WHERE COD_EMPRS        = P_COD_EMPRESA 
+              AND UPPER(DCR_PLANO)  = P_DCR_PLANO;   
             --
             ELSE
             --
@@ -1049,38 +1162,39 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             LOOP
             L_COUNT := L_COUNT + 1;
             --
-            /*
-            TB_REC_BASE.VLR_BENEF_BD_PROP      := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 1, P_COD_EMPRESA, --VLR_BENEF_BD_PROP
-            TB_REC_BASE.VLR_BENEF_BD_INTE      := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, 2); --VLR_BENEF_BD_INTE
-            TB_REC_BASE.RENDA_ESTIM_PROP       := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, 3); --RENDA_ESTIM_PROP
-            TB_REC_BASE.RENDA_ESTIM_INT        := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, 4); --RENDA_ESTIM_INT
-            TB_REC_BASE.VLR_CTB_PROP_BD        := 0;                                             --VLR_CTB_PROP_BD
-            TB_REC_BASE.VLR_CTB_INT_BD         := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE); --VLR_CTB_INT_BD
-            */
+            
+            TB_REC_BASE.VLR_BENEF_BD_PROP      := 0; --VLR_BENEF_BD_PROP
+            TB_REC_BASE.VLR_BENEF_BD_INTE      := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 1, P_COD_EMPRESA, P_DTA_MOV); --VLR_BENEF_BD_INTE
+            TB_REC_BASE.RENDA_ESTIM_PROP       := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 2, P_COD_EMPRESA, P_DTA_MOV); --RENDA_ESTIM_PROP
+            TB_REC_BASE.RENDA_ESTIM_INT        := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 3, P_COD_EMPRESA, P_DTA_MOV); --RENDA_ESTIM_INT
+            TB_REC_BASE.VLR_CTB_PROP_BD        := 0; --VLR_CTB_PROP_BD
+            TB_REC_BASE.VLR_CTB_INT_BD         := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE);                              --VLR_CTB_INT_BD
+            
 
-           UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
-              SET  VLR_BENEF_BD_PROP  = TB_REC_BASE.VLR_BENEF_BD_PROP
-                  ,VLR_BENEF_BD_INTE  = TB_REC_BASE.VLR_BENEF_BD_INTE
-                  ,RENDA_ESTIM_PROP   = TB_REC_BASE.RENDA_ESTIM_PROP
-                  ,RENDA_ESTIM_INT    = TB_REC_BASE.RENDA_ESTIM_INT
-                  ,VLR_CTB_PROP_BD    = TB_REC_BASE.VLR_CTB_PROP_BD
-                  ,VLR_CTB_INT_BD     = TB_REC_BASE.VLR_CTB_INT_BD 
-               --
-              WHERE TPO_DADO          = RG.TPO_DADO
-                AND COD_EMPRS         = RG.COD_EMPRS
-                AND NUM_RGTRO_EMPRG   = RG.NUM_RGTRO_EMPRG
-                AND DTA_FIM_EXTR      = L_DTA_FIM;
+             UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
+                SET  VLR_BENEF_BD_PROP  = TB_REC_BASE.VLR_BENEF_BD_PROP
+                    ,VLR_BENEF_BD_INTE  = TB_REC_BASE.VLR_BENEF_BD_INTE
+                    ,RENDA_ESTIM_PROP   = TB_REC_BASE.RENDA_ESTIM_PROP
+                    ,RENDA_ESTIM_INT    = TB_REC_BASE.RENDA_ESTIM_INT
+                    ,VLR_CTB_PROP_BD    = TB_REC_BASE.VLR_CTB_PROP_BD
+                    ,VLR_CTB_INT_BD     = TB_REC_BASE.VLR_CTB_INT_BD 
+                 --
+                WHERE TPO_DADO          = RG.TPO_DADO
+                  AND COD_EMPRS         = RG.COD_EMPRS
+                  AND NUM_RGTRO_EMPRG   = RG.NUM_RGTRO_EMPRG
+                  AND DTA_FIM_EXTR      = L_DTA_FIM;
 
-            L_C_UPD := SQL%ROWCOUNT;
+               L_C_UPD := SQL%ROWCOUNT;
 
-            IF L_C_UPD > 0 THEN
+              IF L_C_UPD > 0 THEN
 
-               IF (L_COUNT = L_C_UPD) THEN
-                  DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_C_UPD));
-               END IF;
+                 IF (L_COUNT = L_C_UPD) THEN
+                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_C_UPD));
+                    --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
+                 END IF;
 
-            END IF;
-            --DBMS_OUTPUT.PUT_LINE(TB_REC_BASE.VLR_BENEF_BD_PROP);
+              END IF;
+          
             END LOOP;
             --
       END;
@@ -1102,7 +1216,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   BEGIN
     DECLARE
       L_DTA_FIM    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
-      --L_NUM_PLBNF  ATT.ADESAO_PLANO_PARTIC_FSS.NUM_PLBNF%TYPE := 19;
+      L_NUM_PLBNF  ATT.ADESAO_PLANO_PARTIC_FSS.NUM_PLBNF%TYPE := 19;
       L_NUM_CTFSS  ATT.SLD_CONTA_PARTIC_FSS.NUM_CTFSS%TYPE    := 976;
       L_COD_UM     ATT.SLD_CONTA_PARTIC_FSS.COD_UM%TYPE       := 248;
       L_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE         := 4;
@@ -1164,13 +1278,13 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         L_C_INS := L_C_INS + 1;
         --
         
-/*        TB_REC_BASE.VLR_BENEF_BD_INTE   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 1, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DR
-        TB_REC_BASE.RENDA_ESTIM_PROP    := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 2, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DU
-        TB_REC_BASE.RENDA_ESTIM_INT     := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 3, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DV
-        TB_REC_BASE.VLR_CTB_INT_BD      := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE); -- EI
-        TB_REC_BASE.VLR_CTB_PROP_BD     := 0;                                                           -- EG
-        TB_REC_BASE.VLR_SLD_ADICIONAL   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, C_DESC_PLANO_ELETROPAULO, 4, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- RES3
-        TB_REC_BASE.VLR_BENEF_ADICIONAL := TB_REC_BASE.VLR_SLD_ADICIONAL / 130;                         -- RES4*/
+        TB_REC_BASE.VLR_BENEF_BD_INTE   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 1, PCOD_EMPRESA, PDTA_MOV, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DR
+        TB_REC_BASE.RENDA_ESTIM_PROP    := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 2, PCOD_EMPRESA, PDTA_MOV, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DU
+        TB_REC_BASE.RENDA_ESTIM_INT     := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 3, PCOD_EMPRESA, PDTA_MOV, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DV
+        TB_REC_BASE.VLR_CTB_INT_BD      := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE);                                                                  -- EI
+        TB_REC_BASE.VLR_CTB_PROP_BD     := 0;                                                                                                                                      -- EG
+        TB_REC_BASE.VLR_SLD_ADICIONAL   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 4, PCOD_EMPRESA, PDTA_MOV, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- RES3
+        TB_REC_BASE.VLR_BENEF_ADICIONAL := TB_REC_BASE.VLR_SLD_ADICIONAL / 130;                         -- RES4
         
         --
         UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB A

@@ -26,4 +26,28 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 
 
 
+26/04/2021
+ Criado a procedure PRC_CARGA_ARQUIVO, aguardando DBA conceder acesso...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
