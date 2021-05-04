@@ -38,6 +38,12 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 
 
 
+04/05/2021
+ Foi alterado a PRC_CARGA_ARQUIVO para utilizar a package UTL_FILE, falta criar a tabela 
+  OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO NO NewDev e os demais ambientes...
+  
+  
+
 
 
 
