@@ -152,30 +152,280 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     PROCEDURE PRC_CARGA_ARQUIVO IS
     
        L_REGISTRO      CLOB;
-       L_CODIGO        VARCHAR2(1) := '';
-       L_INSTR         NUMBER      := 0;
-       L_QTD_SEPARADOR NUMBER      := 0;
-       
-      CURSOR REG_DESTINO IS
+       L_CONTEUDO      CLOB;
+       L_IDX           NUMBER := 0;
+       L_INSTR_I       NUMBER := 0;
+       L_QTD_SEPARADOR NUMBER := 0;
+             
+      -- CRIAR UM TYPE RECORD
+       TYPE REC_CARGA IS RECORD( TPO_DADO                          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE
+                                ,COD_EMPRS                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
+                                ,NUM_RGTRO_EMPRG                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.NUM_RGTRO_EMPRG%TYPE
+                                ,NOM_EMPRG                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.NOM_EMPRG%TYPE
+                                ,DTA_EMISS                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE
+                                ,NUM_FOLHA                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.NUM_FOLHA%TYPE
+                                ,DCR_PLANO                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
+                                ,PER_INIC_EXTR                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PER_INIC_EXTR%TYPE
+                                ,PER_FIM_EXTR                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PER_FIM_EXTR%TYPE
+                                ,DTA_INIC_EXTR                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_INIC_EXTR%TYPE
+                                ,DTA_FIM_EXTR                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE
+                                ,DCR_SLD_MOV_SALDADO               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_SLD_MOV_SALDADO%TYPE
+                                ,SLD_PL_SALDADO_MOV_INIC           ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_SALDADO_MOV_INIC%TYPE
+                                ,CTB_PL_SALDADO_MOV                ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_PL_SALDADO_MOV%TYPE
+                                ,RENT_PL_SALDADO_MOV               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_PL_SALDADO_MOV%TYPE
+                                ,SLD_PL_SALDADO_MOV_FIM            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_SALDADO_MOV_FIM%TYPE
+                                ,DCR_SLD_MOV_BD                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_SLD_MOV_BD%TYPE
+                                ,SLD_PL_BD_INIC                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_BD_INIC%TYPE
+                                ,CTB_PL_MOV_BD                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_PL_MOV_BD%TYPE
+                                ,RENT_PL_MOV_BD                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_PL_MOV_BD%TYPE
+                                ,SLD_PL_BD_MOV_FIM                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_BD_MOV_FIM%TYPE
+                                ,DCR_SLD_MOV_CV                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_SLD_MOV_CV%TYPE
+                                ,SLD_PL_CV_MOV_INIC                ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_CV_MOV_INIC%TYPE
+                                ,CTB_PL_MOV_CV                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_PL_MOV_CV%TYPE
+                                ,RENT_PL_MOV_CV                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_PL_MOV_CV%TYPE
+                                ,SLD_PL_CV_MOV_FIM                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_PL_CV_MOV_FIM%TYPE
+                                ,DCR_CTA_OBRIG_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_OBRIG_PARTIC%TYPE
+                                ,SLD_CTA_OBRIG_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_OBRIG_PARTIC%TYPE
+                                ,CTB_CTA_OBRIG_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_CTA_OBRIG_PARTIC%TYPE
+                                ,RENT_CTA_OBRIG_PARTIC             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_CTA_OBRIG_PARTIC%TYPE
+                                ,SLD_CTA_OBRIG_PARTIC_FIM          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_OBRIG_PARTIC_FIM%TYPE
+                                ,DCR_CTA_NORM_PATROC               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_NORM_PATROC%TYPE
+                                ,SLD_CTA_NORM_PATROC               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_NORM_PATROC%TYPE
+                                ,CTB_CTA_NORM_PATROC               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_CTA_NORM_PATROC%TYPE
+                                ,RENT_NORM_PATROC                  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_NORM_PATROC%TYPE
+                                ,SLD_NORM_PATROC_INIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_NORM_PATROC_INIC%TYPE
+                                ,DCR_CTA_ESPEC_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_ESPEC_PARTIC%TYPE
+                                ,SLD_CTA_ESPEC_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_ESPEC_PARTIC%TYPE
+                                ,CTB_CTA_ESPEC_PARTIC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_CTA_ESPEC_PARTIC%TYPE
+                                ,RENT_CTA_ESPEC_PARTIC             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_CTA_ESPEC_PARTIC%TYPE
+                                ,SLD_CTA_ESPEC_PARTIC_INIC         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_ESPEC_PARTIC_INIC%TYPE
+                                ,DCR_CTA_ESPEC_PATROC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_ESPEC_PATROC%TYPE
+                                ,SLD_CTA_ESPEC_PATROC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_ESPEC_PATROC%TYPE
+                                ,CTB_CTA_ESPEC_PATROC              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_CTA_ESPEC_PATROC%TYPE
+                                ,RENT_CTA_ESPEC_PATROC             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_CTA_ESPEC_PATROC%TYPE
+                                ,SLD_CTA_ESPEC_PATROC_INIC         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_CTA_ESPEC_PATROC_INIC%TYPE
+                                ,SLD_TOT_INIC                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_TOT_INIC%TYPE
+                                ,CTB_TOT_INIC                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.CTB_TOT_INIC%TYPE
+                                ,RENT_PERIODO                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_PERIODO%TYPE
+                                ,SLD_TOT_FIM                       ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_TOT_FIM%TYPE
+                                ,PRM_MES_PERIODO_CTB               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PRM_MES_PERIODO_CTB%TYPE
+                                ,SEG_MES_PERIODO_CTB               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SEG_MES_PERIODO_CTB%TYPE
+                                ,TER_MES_PERIODO_CTB               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TER_MES_PERIODO_CTB%TYPE
+                                ,DCR_TOT_CTB_BD                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TOT_CTB_BD%TYPE
+                                ,VLR_TOT_CTB_BD_PRM_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_BD_PRM_MES%TYPE
+                                ,VLR_TOT_CTB_BD_SEG_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_BD_SEG_MES%TYPE
+                                ,VLR_TOT_CTB_BD_TER_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_BD_TER_MES%TYPE
+                                ,VLR_TOT_CTB_BD_PERIODO            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_BD_PERIODO%TYPE
+                                ,DCR_TOT_CTB_CV                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TOT_CTB_CV%TYPE
+                                ,VLR_TOT_CTB_CV_PRM_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_CV_PRM_MES%TYPE
+                                ,VLR_TOT_CTB_CV_SEG_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_CV_SEG_MES%TYPE
+                                ,VLR_TOT_CTB_CV_TER_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_CV_TER_MES%TYPE
+                                ,VLR_TOT_CTB_CV_PERIODO            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_CV_PERIODO%TYPE
+                                ,DCR_TPO_CTB_VOL_PARTIC            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_VOL_PARTIC%TYPE
+                                ,VLR_CTB_VOL_PARTIC_PRM_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PARTIC_PRM_MES%TYPE
+                                ,VLR_CTB_VOL_PARTIC_SEG_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PARTIC_SEG_MES%TYPE
+                                ,VLR_CTB_VOL_PARTIC_TER_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PARTIC_TER_MES%TYPE
+                                ,VLR_CTB_VOL_PARTIC_PERIODO        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PARTIC_PERIODO%TYPE
+                                ,DCR_TPO_CTB_VOL_PATROC            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_VOL_PATROC%TYPE
+                                ,VLR_CTB_VOL_PATROC_PRM_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PATROC_PRM_MES%TYPE
+                                ,VLR_CTB_VOL_PATROC_SEG_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PATROC_SEG_MES%TYPE
+                                ,VLR_CTB_VOL_PATROC_TER_MES        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PATROC_TER_MES%TYPE
+                                ,VLR_CTB_VOL_PATROC_PERIODO        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_VOL_PATROC_PERIODO%TYPE
+                                ,DCR_TPO_CTB_OBRIG_PARTIC          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_OBRIG_PARTIC%TYPE
+                                ,VLR_CTB_OBRIG_PARTIC_PRM_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PARTIC_PRM_MES%TYPE
+                                ,VLR_CTB_OBRIG_PARTIC_SEG_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PARTIC_SEG_MES%TYPE
+                                ,VLR_CTB_OBRIG_PARTIC_TER_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PARTIC_TER_MES%TYPE
+                                ,VLR_CTB_OBRIG_PARTIC_PERIODO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PARTIC_PERIODO%TYPE
+                                ,DCR_TPO_CTB_OBRIG_PATROC          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_OBRIG_PATROC%TYPE
+                                ,VLR_CTB_OBRIG_PATROC_PRM_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PATROC_PRM_MES%TYPE
+                                ,VLR_CTB_OBRIG_PATROC_SEG_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PATROC_SEG_MES%TYPE
+                                ,VLR_CTB_OBRIG_PATROC_TER_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PATROC_TER_MES%TYPE
+                                ,VLR_CTB_OBRIG_PATROC_PERIODO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_OBRIG_PATROC_PERIODO%TYPE
+                                ,DCR_TPO_CTB_ESPOR_PATROC          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_ESPOR_PATROC%TYPE
+                                ,VLR_CTB_ESPOR_PATROC_PRM_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PATROC_PRM_MES%TYPE
+                                ,VLR_CTB_ESPOR_PATROC_SEG_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PATROC_SEG_MES%TYPE
+                                ,VLR_CTB_ESPOR_PATROC_TER_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PATROC_TER_MES%TYPE
+                                ,VLR_CTB_ESPOR_PATROC_PERIODO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PATROC_PERIODO%TYPE
+                                ,DCR_TPO_CTB_ESPOR_PARTIC          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_TPO_CTB_ESPOR_PARTIC%TYPE
+                                ,VLR_CTB_ESPOR_PARTIC_PRM_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PARTIC_PRM_MES%TYPE
+                                ,VLR_CTB_ESPOR_PARTIC_SEG_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PARTIC_SEG_MES%TYPE
+                                ,VLR_CTB_ESPOR_PARTIC_TER_MES      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PARTIC_TER_MES%TYPE
+                                ,VLR_CTB_ESPOR_PARTIC_PERIODO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_ESPOR_PARTIC_PERIODO%TYPE
+                                ,TOT_CTB_PRM_MES                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TOT_CTB_PRM_MES%TYPE
+                                ,TOT_CTB_SEG_MES                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TOT_CTB_SEG_MES%TYPE
+                                ,TOT_CTB_TER_MES                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TOT_CTB_TER_MES%TYPE
+                                ,TOT_CTB_EXTRATO                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TOT_CTB_EXTRATO%TYPE
+                                ,PRM_MES_PERIODO_RENT              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PRM_MES_PERIODO_RENT%TYPE
+                                ,SEG_MES_PERIODO_RENT              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SEG_MES_PERIODO_RENT%TYPE
+                                ,TER_MES_PERIODO_RENT              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TER_MES_PERIODO_RENT%TYPE
+                                ,PCT_RENT_REAL_PRM_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_REAL_PRM_MES%TYPE
+                                ,PCT_RENT_REAL_SEG_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_REAL_SEG_MES%TYPE
+                                ,PCT_RENT_REAL_TER_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_REAL_TER_MES%TYPE
+                                ,PCT_RENT_REAL_TOT_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_REAL_TOT_MES%TYPE
+                                ,PCT_RENT_LMTD_PRM_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_LMTD_PRM_MES%TYPE
+                                ,PCT_RENT_LMTD_SEG_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_LMTD_SEG_MES%TYPE
+                                ,PCT_RENT_LMTD_TER_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_LMTD_TER_MES%TYPE
+                                ,PCT_RENT_LMTD_TOT_MES             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_LMTD_TOT_MES%TYPE
+                                ,PCT_RENT_IGPDI_PRM_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_IGPDI_PRM_MES%TYPE
+                                ,PCT_RENT_IGPDI_SEG_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_IGPDI_SEG_MES%TYPE
+                                ,PCT_RENT_IGPDI_TER_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_IGPDI_TER_MES%TYPE
+                                ,PCT_RENT_IGPDI_TOT_MES            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_IGPDI_TOT_MES%TYPE
+                                ,PCT_RENT_URR_PRM_MES              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_URR_PRM_MES%TYPE
+                                ,PCT_RENT_URR_SEG_MES              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_URR_SEG_MES%TYPE
+                                ,PCT_RENT_URR_TER_MES              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_URR_TER_MES%TYPE
+                                ,PCT_RENT_URR_TOT_MES              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.PCT_RENT_URR_TOT_MES%TYPE
+                                ,DTA_APOS_PROP                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_APOS_PROP%TYPE
+                                ,DTA_APOS_INTE                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_APOS_INTE%TYPE
+                                ,VLR_BENEF_PSAP_PROP               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_PSAP_PROP%TYPE
+                                ,VLR_BENEF_PSAP_INTE               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_PSAP_INTE%TYPE
+                                ,VLR_BENEF_BD_PROP                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE
+                                ,VLR_BENEF_BD_INTE                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE
+                                ,VLR_BENEF_CV_PROP                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_CV_PROP%TYPE
+                                ,VLR_BENEF_CV_INTE                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_CV_INTE%TYPE
+                                ,RENDA_ESTIM_PROP                  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_PROP%TYPE
+                                ,RENDA_ESTIM_INT                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_INT%TYPE
+                                ,VLR_RESERV_SALD_LQDA              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_RESERV_SALD_LQDA%TYPE
+                                ,TXT_PRM_MENS                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TXT_PRM_MENS%TYPE
+                                ,TXT_SEG_MENS                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TXT_SEG_MENS%TYPE
+                                ,TXT_TER_MENS                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TXT_TER_MENS%TYPE
+                                ,TXT_QUA_MENS                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TXT_QUA_MENS%TYPE
+                                ,IDADE_PROP_BSPS                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_PROP_BSPS%TYPE
+                                ,VLR_CTB_PROP_BSPS                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_PROP_BSPS%TYPE
+                                ,IDADE_INT_BSPS                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_INT_BSPS%TYPE
+                                ,VLR_CTB_INT_BSPS                  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_INT_BSPS%TYPE
+                                ,IDADE_PROP_BD                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_PROP_BD%TYPE
+                                ,VLR_CTB_PROP_BD                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_PROP_BD%TYPE
+                                ,IDADE_INT_BD                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_INT_BD%TYPE
+                                ,VLR_CTB_INT_BD                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_INT_BD%TYPE
+                                ,IDADE_PROP_CV                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_PROP_CV%TYPE
+                                ,VLR_CTB_PROP_CV                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_PROP_CV%TYPE
+                                ,IDADE_INT_CV                      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_INT_CV%TYPE
+                                ,VLR_CTB_INT_CV                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_INT_CV%TYPE
+                                ,DCR_COTA_INDEX_PLAN_1             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_COTA_INDEX_PLAN_1%TYPE
+                                ,DCR_COTA_INDEX_PLAN_2             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_COTA_INDEX_PLAN_2%TYPE
+                                ,DCR_CTA_APOS_INDIV_VOL_PARTIC     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_APOS_INDIV_VOL_PARTIC%TYPE
+                                ,SLD_INI_CTA_APO_INDI_VOL_PARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_CTA_APO_INDI_VOL_PARTI%TYPE
+                                ,VLR_TOT_CTB_APO_INDI_VOL_PARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_APO_INDI_VOL_PARTI%TYPE
+                                ,REN_TOT_CTB_APO_INDI_VOL_PARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_CTB_APO_INDI_VOL_PARTI%TYPE
+                                ,SLD_FIM_CTA_APO_INDI_VOL_PARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_APO_INDI_VOL_PARTI%TYPE
+                                ,DCR_CTA_APOS_INDIV_ESPO_PARTIC    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_APOS_INDIV_ESPO_PARTIC%TYPE
+                                ,SLD_INI_CTA_APO_INDI_ESPOPARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_CTA_APO_INDI_ESPOPARTI%TYPE
+                                ,VLR_TOT_CTB_APO_INDI_ESPOPARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_APO_INDI_ESPOPARTI%TYPE
+                                ,REN_TOT_CTB_APO_INDI_ESPOPARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_CTB_APO_INDI_ESPOPARTI%TYPE
+                                ,SLD_FIM_CTA_APO_INDI_ESPOPARTI    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_APO_INDI_ESPOPARTI%TYPE
+                                ,DCR_CTA_APOS_INDIV_VOL_PATROC     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_APOS_INDIV_VOL_PATROC%TYPE
+                                ,SLD_INI_CTA_APO_INDI_VOL_PATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_CTA_APO_INDI_VOL_PATRO%TYPE
+                                ,VLR_TOT_CTB_APO_INDI_VOL_PATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_APO_INDI_VOL_PATRO%TYPE
+                                ,REN_TOT_CTB_APO_INDI_VOL_PATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_CTB_APO_INDI_VOL_PATRO%TYPE
+                                ,SLD_FIM_CTA_APO_INDI_VOL_PATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_APO_INDI_VOL_PATRO%TYPE
+                                ,DCR_CTA_APOS_INDIV_SUPL_PATROC    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_CTA_APOS_INDIV_SUPL_PATROC%TYPE
+                                ,SLD_INI_CTA_APO_INDI_SUPLPATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_CTA_APO_INDI_SUPLPATRO%TYPE
+                                ,VLR_TOT_CTB_APO_INDI_SUPLPATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_APO_INDI_SUPLPATRO%TYPE
+                                ,REN_TOT_CTB_APO_INDI_SUPLPATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_CTB_APO_INDI_SUPLPATRO%TYPE
+                                ,SLD_FIM_CTA_APO_INDI_SUPLPATRO    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_APO_INDI_SUPLPATRO%TYPE
+                                ,DCR_PORT_TOTAL                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_TOTAL%TYPE
+                                ,SLD_INIC_CTA_PORT_TOT             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_TOT%TYPE
+                                ,VLR_TOT_CTB_PORT_TOT              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_TOT%TYPE
+                                ,RENT_TOT_CTB_PORT_TOT             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_TOT%TYPE
+                                ,SLD_FIM_CTA_PORT_TOT              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_TOT%TYPE
+                                ,DCR_PORT_ABERTA                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_ABERTA%TYPE
+                                ,SLD_INIC_CTA_PORT_ABERTA          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_ABERTA%TYPE
+                                ,VLR_TOT_CTB_PORT_ABERTA           ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_ABERTA%TYPE
+                                ,RENT_TOT_CTB_PORT_ABERTA          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_ABERTA%TYPE
+                                ,SLD_FIM_CTA_PORT_ABERTA           ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_ABERTA%TYPE
+                                ,DCR_PORT_FECHADA                  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_FECHADA%TYPE
+                                ,SLD_INIC_CTA_PORT_FECHADA         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_FECHADA%TYPE
+                                ,VLR_TOT_CTB_PORT_FECHADA          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_FECHADA%TYPE
+                                ,RENT_TOT_CTB_PORT_FECHADA         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_FECHADA%TYPE
+                                ,SLD_FIM_CTA_PORT_FECHADA          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_FECHADA%TYPE
+                                ,DCR_PORT_JOIA_ABERTA              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_JOIA_ABERTA%TYPE
+                                ,SLD_INIC_CTA_PORT_JOIA_ABERTA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_JOIA_ABERTA%TYPE
+                                ,VLR_TOT_CTB_PORT_JOIA_ABERTA      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_JOIA_ABERTA%TYPE
+                                ,RENT_TOT_CTB_PORT_JOIA_ABERTA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_JOIA_ABERTA%TYPE
+                                ,SLD_FIM_CTA_PORT_JOIA_ABERTA      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_JOIA_ABERTA%TYPE
+                                ,DCR_PORT_JOIA_FECHADA             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_JOIA_FECHADA%TYPE
+                                ,SLD_INIC_CTA_PORT_JOIA_FECHADA    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_JOIA_FECHADA%TYPE
+                                ,VLR_TOT_CTB_PORT_JOIA_FECHADA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_JOIA_FECHADA%TYPE
+                                ,RENT_TOT_CTB_PORT_JOIA_FECHADA    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_JOIA_FECHADA%TYPE
+                                ,SLD_FIM_CTA_PORT_JOIA_FECHADA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_JOIA_FECHADA%TYPE
+                                ,DCR_DISTR_FUND_PREV_PARTIC        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_DISTR_FUND_PREV_PARTIC%TYPE
+                                ,SLD_INI_DIST_FUND_PREV_PARTI      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_DIST_FUND_PREV_PARTI%TYPE
+                                ,VLR_TOT_DIST_FUND_PREV_PARTI      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_DIST_FUND_PREV_PARTI%TYPE
+                                ,REN_TOT_DIST_FUND_PREV_PARTI      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_DIST_FUND_PREV_PARTI%TYPE
+                                ,SLDFIM_CTA_DISTFUNDPREVPARTI      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLDFIM_CTA_DISTFUNDPREVPARTI%TYPE
+                                ,DCR_DISTR_FUND_PREV_PATROC        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_DISTR_FUND_PREV_PATROC%TYPE
+                                ,SLD_INI_DIST_FUND_PREV_PATRO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INI_DIST_FUND_PREV_PATRO%TYPE
+                                ,VLR_TOT_DIST_FUND_PREV_PATRO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_DIST_FUND_PREV_PATRO%TYPE
+                                ,REN_TOT_DIST_FUND_PREV_PATRO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.REN_TOT_DIST_FUND_PREV_PATRO%TYPE
+                                ,SLDFIM_CTA_DISTFUNDPREVPATRO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLDFIM_CTA_DISTFUNDPREVPATRO%TYPE
+                                ,DCR_PORT_FINAL                    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PORT_FINAL%TYPE
+                                ,SLD_INIC_CTA_PORT_FIM             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_INIC_CTA_PORT_FIM%TYPE
+                                ,VLR_TOT_CTB_PORT_FIM              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_TOT_CTB_PORT_FIM%TYPE
+                                ,RENT_TOT_CTB_PORT_FIM             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENT_TOT_CTB_PORT_FIM%TYPE
+                                ,SLD_FIM_CTA_PORT_FIM              ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.SLD_FIM_CTA_PORT_FIM%TYPE
+                                ,DCR_SLD_PROJETADO                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_SLD_PROJETADO%TYPE
+                                ,VLR_SLD_PROJETADO                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SLD_PROJETADO%TYPE
+                                ,VLR_SLD_ADICIONAL                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SLD_ADICIONAL%TYPE
+                                ,VLR_BENEF_ADICIONAL               ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_ADICIONAL%TYPE
+                                ,DTA_ULT_ATUAL                     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_ULT_ATUAL%TYPE
+                                ,VLR_CONTRIB_RISCO                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CONTRIB_RISCO%TYPE
+                                ,VLR_CONTRIB_PATRC                 ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CONTRIB_PATRC%TYPE
+                                ,VLR_CAPIT_SEGURADO                ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CAPIT_SEGURADO%TYPE
+                                ,VLR_CONTRIB_ADM                   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CONTRIB_ADM%TYPE
+                                ,VLR_CONTRIB_ADM_PATRC             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CONTRIB_ADM_PATRC%TYPE
+                                ,VLR_SIMUL_BENEF_PORCETAGEM        ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SIMUL_BENEF_PORCETAGEM%TYPE
+                                ,DTA_ELEGIB_BENEF_PORCETAGEM       ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_ELEGIB_BENEF_PORCETAGEM%TYPE
+                                ,IDADE_ELEGIB_PORCETAGEM           ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_ELEGIB_PORCETAGEM%TYPE
+                                ,DTA_EXAURIM_BENEF_PORCETAGEM      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EXAURIM_BENEF_PORCETAGEM%TYPE
+                                ,VLR_SIMUL_BENEF_PRAZO             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SIMUL_BENEF_PRAZO%TYPE
+                                ,DTA_ELEGIB_BENEF_PRAZO            ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_ELEGIB_BENEF_PRAZO%TYPE
+                                ,IDADE_ELEGIB_BENEF_PRAZO          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.IDADE_ELEGIB_BENEF_PRAZO%TYPE
+                                ,DTA_EXAURIM_BENEF_PRAZO           ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EXAURIM_BENEF_PRAZO%TYPE
+                               );
+
+            TB_REC_CARGA REC_CARGA;
       
-        SELECT * 
-           FROM FC_PRE_TBL_CARGA_EXTRATO; -- Criar essa tabela -- falar com Meireles rodar o arquivo 018
-                                                -- falta os ambientes NewTst e Pré-Prod...
+      
+                 
         
     BEGIN
-        G_ARQ := UTL_FILE.FOPEN(G_DIR,G_NAME,G_READ,G_SIZE);         
-             
-      --
-      FOR RG IN REG_DESTINO
-      
-        LOOP
-          UTL_FILE.GET_LINE(G_ARQ, L_REGISTRO);
+        G_ARQ := UTL_FILE.FOPEN(G_DIR,G_NAME,G_READ,G_SIZE); 
+        --DBMS_OUTPUT.PUT_LINE();             
+        --FOR RG IN REG_DESTINO  
+        
+          LOOP       
+            UTL_FILE.GET_LINE(G_ARQ, L_REGISTRO);
+            --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);
           
-          --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);
-          L_INSTR         := INSTR(RG.TPO_DADO,';')-1;         
-          L_QTD_SEPARADOR := LENGTH(TRIM(RG.TPO_DADO)) - LENGTH(TRIM(REPLACE(RG.TPO_DADO, ';', '')));
-          
-        END LOOP;
+            L_INSTR_I := INSTR(L_REGISTRO,';');                                                       -- PEGA POSICAO DO 1º VALOR
+            L_QTD_SEPARADOR := LENGTH(TRIM(L_REGISTRO)) - LENGTH(TRIM(REPLACE(L_REGISTRO, ';', ''))); -- QTDE DE SEPARADORES                             
+            DBMS_OUTPUT.PUT_LINE('L_INSTR_I.....' || L_INSTR_I || CHR(13)||
+                                 'L_QTD_SEPARADOR.....'|| L_QTD_SEPARADOR || CHR(13));
+                                 
+                --WHILE L_IDX < L_QTD_SEPARADOR
+                  --LOOP 
+                    --IF (L_INSTR_I = 1 ) THEN
+                  
+                    --L_CONTEUDO := SUBSTR(L_REGISTRO, 1, L_INSTR_I -1);
+                    
+                                        
+                    --ELSE
+                    
+                    --L_CONTEUDO := SUBSTR(L_REGISTRO, L_INSTR_I + 1, INSTR(SUBSTR(L_REGISTRO, L_INSTR_I, LENGTH(L_REGISTRO) - 1), ';'));
+                    
+                    --END IF;
+                    
+                    
+                   --L_IDX     := L_IDX + 1;
+                   --L_INSTR_I := L_INSTR_I + 1;
+                --END LOOP;
+                
+                  DBMS_OUTPUT.PUT_LINE(L_CONTEUDO);  
+                  --INSERT INTO OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO 
+                  --SET TB_REC_CARGA;
+                 
+                  
+          END LOOP;
         
       EXCEPTION
         WHEN UTL_FILE.INVALID_PATH THEN

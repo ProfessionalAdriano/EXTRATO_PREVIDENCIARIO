@@ -43,7 +43,9 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
   OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO NO NewDev e os demais ambientes...
   
   
-
+05/05/2021 
+	Trabalhando com a PRC_CARGA_ARQUIVO para carregar os dados na tabela OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO
+	
 
 
 
