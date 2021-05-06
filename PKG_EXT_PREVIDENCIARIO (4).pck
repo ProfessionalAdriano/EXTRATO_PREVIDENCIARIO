@@ -153,10 +153,13 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     
        L_REGISTRO      CLOB;
        L_CONTEUDO      CLOB;
-       L_IDX           NUMBER := 0;
-       L_INSTR_I       NUMBER := 0;
-       L_QTD_SEPARADOR NUMBER := 0;
-             
+       SSQL            CLOB; 
+       L_COUNT         NUMBER := 1;  
+       
+       --L_IDX           NUMBER := 0;
+       --L_INSTR_I       NUMBER := 0;
+       --L_QTD_SEPARADOR NUMBER := 0;
+          
       -- CRIAR UM TYPE RECORD
        TYPE REC_CARGA IS RECORD( TPO_DADO                          ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE
                                 ,COD_EMPRS                         ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
@@ -391,41 +394,43 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     BEGIN
         G_ARQ := UTL_FILE.FOPEN(G_DIR,G_NAME,G_READ,G_SIZE); 
         --DBMS_OUTPUT.PUT_LINE();             
-        --FOR RG IN REG_DESTINO  
+  
         
           LOOP       
             UTL_FILE.GET_LINE(G_ARQ, L_REGISTRO);
             --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);
           
-            L_INSTR_I := INSTR(L_REGISTRO,';');                                                       -- PEGA POSICAO DO 1º VALOR
-            L_QTD_SEPARADOR := LENGTH(TRIM(L_REGISTRO)) - LENGTH(TRIM(REPLACE(L_REGISTRO, ';', ''))); -- QTDE DE SEPARADORES                             
-            DBMS_OUTPUT.PUT_LINE('L_INSTR_I.....' || L_INSTR_I || CHR(13)||
-                                 'L_QTD_SEPARADOR.....'|| L_QTD_SEPARADOR || CHR(13));
-                                 
-                --WHILE L_IDX < L_QTD_SEPARADOR
-                  --LOOP 
-                    --IF (L_INSTR_I = 1 ) THEN
-                  
-                    --L_CONTEUDO := SUBSTR(L_REGISTRO, 1, L_INSTR_I -1);
-                    
-                                        
-                    --ELSE
-                    
-                    --L_CONTEUDO := SUBSTR(L_REGISTRO, L_INSTR_I + 1, INSTR(SUBSTR(L_REGISTRO, L_INSTR_I, LENGTH(L_REGISTRO) - 1), ';'));
-                    
-                    --END IF;
-                    
-                    
-                   --L_IDX     := L_IDX + 1;
-                   --L_INSTR_I := L_INSTR_I + 1;
-                --END LOOP;
+            IF SUBSTR(L_REGISTRO, 1,1 ) = '1' THEN
+               --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);     
+              
+               DELETE FROM OWN_FUNCESP.FC_CARGA_EXTRATO;
+                COMMIT;     
+              
+                SSQL := ' INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX) ' ||
+                        ' WITH TEMP AS ' ||
+                        ' ( SELECT ''' || REPLACE(L_REGISTRO, '''', ' ') || ''' DADOS FROM DUAL ) ' ||
+                        ' SELECT DISTINCT ' ||
+                        ' TRIM(REGEXP_SUBSTR(T.DADOS, ''[^;]+'', 1, LEVELS.COLUMN_VALUE)) AS DADOS, LEVELS.COLUMN_VALUE NIVEL 1' ||
+                        ' FROM ' ||
+                        ' TEMP T, ' ||
+                        ' TABLE(CAST(MULTISET(SELECT LEVEL FROM DUAL CONNECTBY LEVEL <= LENGTH (REGEXP_REPLACE(T.DADOS, ''[^;]+'')) + 1) AS SYS.ODCINUMBERLIST)) LEVELS';
+                        
+              
+                EXECUTE IMMEDIATE(SSQL);
+                --COMMIT;
                 
-                  DBMS_OUTPUT.PUT_LINE(L_CONTEUDO);  
-                  --INSERT INTO OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO 
-                  --SET TB_REC_CARGA;
-                 
-                  
+                SELECT DADO
+                INTO TB_REC_CARGA.TPO_DADO
+                FROM OWN_FUNCESP.FC_CARGA_EXTRATO
+                WHERE INDX = L_COUNT; --1;
+            
+                
+                L_COUNT := L_COUNT + 1;
+                DBMS_OUTPUT.PUT_LINE(TB_REC_CARGA.TPO_DADO);
+            END IF;              
+            
           END LOOP;
+          
         
       EXCEPTION
         WHEN UTL_FILE.INVALID_PATH THEN
