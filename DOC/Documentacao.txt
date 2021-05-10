@@ -47,7 +47,9 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 	Trabalhando com a PRC_CARGA_ARQUIVO para carregar os dados na tabela OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO
 	
 
-
+10/05/2021
+	Criação da FUNCTION FUN_CARGA_STAGE
+		Tratar o retorno sem valor
 
 
 
