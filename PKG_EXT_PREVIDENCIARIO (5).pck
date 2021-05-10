@@ -2667,7 +2667,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                 EXECUTE IMMEDIATE(SSQL);
                 COMMIT;
                                                                                                     
-            REC_CARGA.TPO_DADO								              := FUN_CARGA_STAGE(1);
+            REC_CARGA.TPO_DADO								:= FUN_CARGA_STAGE(1);
             REC_CARGA.COD_EMPRS                             := FUN_CARGA_STAGE(2);
             REC_CARGA.NUM_RGTRO_EMPRG                       := FUN_CARGA_STAGE(3);
             REC_CARGA.NOM_EMPRG                             := FUN_CARGA_STAGE(4);
