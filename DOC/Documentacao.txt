@@ -52,6 +52,8 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 		Tratar o retorno sem valor
 
 
+11/05/2021
+	Trabalhando com a FUNCTION FN_TRATA_ARQUIVO, tratando o dado da coluna 5
 
 
 
