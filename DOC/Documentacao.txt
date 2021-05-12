@@ -57,7 +57,8 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 
 
 
-
+12/05/2021
+ Implementação do cursor C_TRATA_DADOS... Case 
 
 
 

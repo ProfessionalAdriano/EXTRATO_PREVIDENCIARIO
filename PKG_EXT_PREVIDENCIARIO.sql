@@ -54,7 +54,6 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
  
 END PKG_EXT_PREVIDENCIARIO;
 /
-
 CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -712,7 +711,44 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
               ,TO_NUMBER(COD_EMPRS)                                                                    AS COD_EMPRS         
               ,NUM_RGTRO_EMPRG                                                                         AS NUM_RGTRO_EMPRG -- 
               ,NOM_EMPRG                                                                               AS NOM_EMPRG    
-              ,TO_DATE(REPLACE(DTA_EMISS,'Fev','Feb'),'DD/MM/RRRR')                                    AS DTA_EMISS 
+               ,CASE
+                  WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JAN' THEN
+                       TO_CHAR(TO_DATE(DTA_EMISS),'DD-MM-RRRR')
+                   
+                  WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'FEV','FEB'),4,3) = 'FEB' THEN
+                       TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD-MM-RRRR')
+                   
+                  WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'MAR' THEN
+                       TO_CHAR(TO_DATE(DTA_EMISS),'DD-MM-RRRR')
+                   
+                  WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'ABR','APR'),4,3) = 'APR' THEN
+                       TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD-MM-RRRR') 
+                    
+                   WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'MAI','MAY'),4,3) = 'MAY' THEN
+                        TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'MAI', 'MAY')),'DD-MM-RRRR')
+                   
+                   WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUN' THEN
+                        TO_CHAR(TO_DATE(DTA_EMISS),'DD-MM-RRRR') 
+                   
+                   WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUL' THEN
+                        TO_CHAR(TO_DATE(DTA_EMISS),'DD-MM-RRRR')
+                    
+                    WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'AGO','AUG'),4,3) = 'AUG' THEN
+                         TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD-MM-RRRR')   
+                    
+                    WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'SET','SEP'),4,3) = 'SEP' THEN
+                         TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'SET', 'SEP')),'DD-MM-RRRR')
+                         
+                    WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'OUT','OCT'),4,3) = 'OCT' THEN
+                         TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'OUT', 'OCT')),'DD-MM-RRRR')
+                    
+                    WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'NOV' THEN
+                        TO_CHAR(TO_DATE(DTA_EMISS),'DD-MM-RRRR')  
+                        
+                    WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'DEZ','DEC'),4,3) = 'DEC' THEN
+                        TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'DEZ', 'DEC')),'DD-MM-RRRR')                       
+                              
+                END                                                                                    AS DTA_EMISS
               ,TO_NUMBER(NUM_FOLHA)                                                                    AS NUM_FOLHA
               ,TRIM(DCR_PLANO)                                                                         AS DCR_PLANO 
               ,PER_INIC_EXTR                                                                           AS PER_INIC_EXTR -- 
@@ -934,7 +970,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO;   
         
       
-    BEGIN             
+    BEGIN                      
         
         BEGIN             
              
@@ -948,7 +984,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         END;
         DBMS_OUTPUT.PUT_LINE('PRC_TRATA_ARQUIVO');
         DBMS_OUTPUT.NEW_LINE();
-      
+              
       --
       --
       FOR RG_TRATA_DADOS IN C_TRATA_DADOS 
@@ -1660,3 +1696,4 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;
+
