@@ -1,45 +1,27 @@
 CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
  -- VARIAVEIS
-  G_HOST_NAME    VARCHAR2(64);
-  
+  G_HOST_NAME    VARCHAR2(64);  
   G_TPO_DADO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE;
   G_COD_EMPRS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE;
-  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE;
   G_DTA_FIM_EXTR  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
+  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE;  
+  G_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE;
+  G_CONT_TEMP     NUMBER        := 0;
+  G_COUNT_LOG     NUMBER        :=0;
+  G_CKECK         CHAR(1)       := ''; 
   G_MODULE        VARCHAR2(255) := '';
   G_OS_USER       VARCHAR2(255) := '';
   G_TERMINAL      VARCHAR2(255) := '';
   G_CURRENT_USER  VARCHAR2(255) := '';
-  G_IP_ADDRESS    VARCHAR2(255) := '';
-  
-
-  
-
+  G_IP_ADDRESS    VARCHAR2(255) := '';  
+  --
+  --
   G_ARQ          UTL_FILE.FILE_TYPE;
-  G_DIR          VARCHAR2(50)          := '/dados/oracle/NEWDEV/work';
-  G_READ         CHAR(1)               := 'R';
-  G_SIZE         NUMBER                := 32767;
+  G_DIR          VARCHAR2(50)   := '/dados/oracle/NEWDEV/work'; 
+  G_READ         CHAR(1)        := 'R';
+  G_SIZE         NUMBER         := 32767;
 
-   
-    PROCEDURE PRC_INICIALIZA_VARIAVEIS;
-    
-    PROCEDURE PRC_GRAVA_LOG ( P_COD_LOG_CARGA_EXTRATO NUMBER    DEFAULT NULL
-                             ,P_TPO_DADO              NUMBER    DEFAULT NULL
-                             ,P_COD_EMPRS             NUMBER    DEFAULT NULL
-                             ,P_NUM_RGTRO_EMPRG       VARCHAR2  DEFAULT NULL
-                             ,P_DTA_FIM_EXTR          DATE      DEFAULT NULL
-                             ,P_QTD_LINHAS            NUMBER    DEFAULT NULL
-                             ,P_DT_INCLUSAO           TIMESTAMP DEFAULT NULL
-                             ,P_STATUS                CHAR      DEFAULT NULL
-                             ,P_OBSERVACAO            VARCHAR2  DEFAULT NULL
-                             ,P_MODULE                VARCHAR2  DEFAULT NULL
-                             ,P_OS_USER               VARCHAR2  DEFAULT NULL
-                             ,P_TERMINAL              VARCHAR2  DEFAULT NULL
-                             ,P_CURRENT_USER          VARCHAR2  DEFAULT NULL
-                             ,P_IP_ADDRESS            VARCHAR2  DEFAULT NULL
-                           );    
-    
     FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER) RETURN VARCHAR2;
            
     PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);
@@ -63,7 +45,6 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
  
 END PKG_EXT_PREVIDENCIARIO;
 /
-
 CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -73,87 +54,6 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 -- DATA CRIACAO: 26/04/2021
 -- MANUTENCOES : 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                           
-
-    PROCEDURE PRC_INICIALIZA_VARIAVEIS IS
-    
-    BEGIN
-      -- captura o usuario logado no BD para gravar na tabela
-      -- de log do processamento de integracao
-      --
-      SELECT SYS_CONTEXT('USERENV', 'MODULE')       AS MODULE
-            ,SYS_CONTEXT('USERENV', 'OS_USER')      AS OS_USER
-            ,SYS_CONTEXT('USERENV', 'TERMINAL')     AS TERMINAL
-            ,SYS_CONTEXT('USERENV', 'CURRENT_USER') AS "CURRENT_USER" 
-            ,SYS_CONTEXT('USERENV', 'IP_ADDRESS')   AS IP_ADDRESS    
-        INTO G_MODULE
-            ,G_OS_USER
-            ,G_TERMINAL
-            ,G_CURRENT_USER
-            ,G_IP_ADDRESS
-        FROM DUAL;
-
-      -- utilizado para definir o host para o disparo de emails
-      --
-      SELECT I.HOST_NAME
-        INTO G_HOST_NAME
-        FROM SYS.V_$INSTANCE I;
-      --
-    END PRC_INICIALIZA_VARIAVEIS;
-    
-
-    PROCEDURE PRC_GRAVA_LOG ( P_COD_LOG_CARGA_EXTRATO NUMBER    DEFAULT NULL
-                             ,P_TPO_DADO              NUMBER    DEFAULT NULL
-                             ,P_COD_EMPRS             NUMBER    DEFAULT NULL
-                             ,P_NUM_RGTRO_EMPRG       VARCHAR2  DEFAULT NULL
-                             ,P_DTA_FIM_EXTR          DATE      DEFAULT NULL
-                             ,P_QTD_LINHAS            NUMBER    DEFAULT NULL
-                             ,P_DT_INCLUSAO           TIMESTAMP DEFAULT NULL
-                             ,P_STATUS                CHAR      DEFAULT NULL
-                             ,P_OBSERVACAO            VARCHAR2  DEFAULT NULL
-                             ,P_MODULE                VARCHAR2  DEFAULT NULL
-                             ,P_OS_USER               VARCHAR2  DEFAULT NULL
-                             ,P_TERMINAL              VARCHAR2  DEFAULT NULL
-                             ,P_CURRENT_USER          VARCHAR2  DEFAULT NULL
-                             ,P_IP_ADDRESS            VARCHAR2  DEFAULT NULL
-                           )
-    IS     
-                                
-    BEGIN
-        
-      -- TABELA DE LOG
-      INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (  COD_LOG_CARGA_EXTRATO
-                                                          ,TPO_DADO
-                                                          ,COD_EMPRS
-                                                          ,DTA_FIM_EXTR
-                                                          ,QTD_LINHAS
-                                                          ,DT_INCLUSAO
-                                                          ,STATUS
-                                                          ,OBSERVACAO
-                                                           --
-                                                          ,MODULE
-                                                          ,OS_USER
-                                                          ,TERMINAL
-                                                          ,CURRENT_USER
-                                                          ,IP_ADDRESS
-                                                        )
-                                                VALUES ( OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO_SEQ.NEXTVAL
-                                                        ,P_TPO_DADO             
-                                                        ,P_COD_EMPRS                 
-                                                        ,P_DTA_FIM_EXTR         
-                                                        ,P_QTD_LINHAS           
-                                                        ,SYSDATE          
-                                                        ,P_STATUS               
-                                                        ,P_OBSERVACAO
-                                                         --           
-                                                        ,P_MODULE               
-                                                        ,P_OS_USER              
-                                                        ,P_TERMINAL             
-                                                        ,P_CURRENT_USER         
-                                                        ,P_IP_ADDRESS
-                                                       );
-                                                       
-    END PRC_GRAVA_LOG;
-    
     
     FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER)
     RETURN VARCHAR2 IS
@@ -446,6 +346,13 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             REC_CARGA.DTA_EXAURIM_BENEF_PRAZO               := FUN_CARGA_STAGE(223);
 
 
+            DELETE FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO
+            WHERE  TPO_DADO  = REC_CARGA.TPO_DADO
+            AND    COD_EMPRS = REC_CARGA.COD_EMPRS
+            AND    NUM_RGTRO_EMPRG  = REC_CARGA.NUM_RGTRO_EMPRG
+            AND    DTA_FIM_EXTR = TO_DATE(REC_CARGA.DTA_FIM_EXTR,'DD/MM/RRRR');
+            COMMIT;
+         
             INSERT INTO OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO VALUES (  REC_CARGA.TPO_DADO
                                                                       ,REC_CARGA.COD_EMPRS
                                                                       ,REC_CARGA.NUM_RGTRO_EMPRG
@@ -674,7 +581,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                                 
             END IF;  
             
-          END LOOP;
+          END LOOP;        
+          
           UTL_FILE.FCLOSE(G_ARQ); 
       EXCEPTION
         WHEN UTL_FILE.INVALID_PATH THEN
@@ -707,7 +615,6 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     IS
       L_TAB_STAGE VARCHAR2(100):= 'TRUNCATE TABLE'||' '|| 'OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO';
       V_COUNT NUMBER     :=0;
-      V_CONT_TEMP NUMBER :=0;
       R_VALIDA BOOLEAN;
           
       CURSOR C_TRATA_DADOS IS
@@ -1023,13 +930,14 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,NVL(DTA_ELEGIB_BENEF_PRAZO,' ')                                                        AS DTA_ELEGIB_BENEF_PRAZO
                   ,NVL(IDADE_ELEGIB_BENEF_PRAZO,' ')                                                      AS IDADE_ELEGIB_BENEF_PRAZO
                   ,NVL(DTA_EXAURIM_BENEF_PRAZO,' ')                                                       AS DTA_EXAURIM_BENEF                                                    */                  
-            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO;          
-      
+            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO;                    
+            
+                               
     BEGIN                      
         
         BEGIN             
              
-             SELECT COUNT(*) INTO V_CONT_TEMP FROM FC_PRE_TBL_CARGA_EXTRATO  WHERE TPO_DADO = 1;
+             SELECT COUNT(*) INTO G_CONT_TEMP FROM FC_PRE_TBL_CARGA_EXTRATO  WHERE TPO_DADO = 1;
               
            EXCEPTION
              WHEN OTHERS THEN 
@@ -1038,7 +946,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
              
         END;              
       --
-      --
+      --                    
+         
       FOR RG_TRATA_DADOS IN C_TRATA_DADOS 
          LOOP
          
@@ -1054,9 +963,17 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                  RG.DTA_INIC_EXTR                                        ||CHR(13)||                                                               
                                  TO_CHAR(RG.DTA_FIM_EXTR,'DD/MM/RRRR')                   ||CHR(13)
                                );  */ 
+                               
          
          -- LIMPA A TABELA DE STAGE:                
          EXECUTE IMMEDIATE(L_TAB_STAGE); 
+         
+         DELETE FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
+         WHERE  TPO_DADO  = RG_TRATA_DADOS.TPO_DADO
+         AND    COD_EMPRS = RG_TRATA_DADOS.COD_EMPRS
+         AND    NUM_RGTRO_EMPRG  = RG_TRATA_DADOS.NUM_RGTRO_EMPRG
+         AND    DTA_FIM_EXTR = TO_DATE(RG_TRATA_DADOS.Dta_Fim_Extr,'DD/MM/RRRR');
+         COMMIT;
          
          INSERT INTO ATT.FC_PRE_TBL_BASE_EXTRAT_CTB (  TPO_DADO
                                                       ,COD_EMPRS
@@ -1508,16 +1425,106 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        --,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO                                                        
                                                       );
                                                  COMMIT;    
-
-
+                                                 
+                                                  G_TPO_DADO     := RG_TRATA_DADOS.TPO_DADO;
+                                                  G_COD_EMPRS    := RG_TRATA_DADOS.COD_EMPRS;
+                                                  G_DTA_FIM_EXTR := TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR');
+                                                  G_DTA_EMISS    := TO_DATE(RG_TRATA_DADOS.DTA_EMISS,'DD/MM/RRRR');
+                                                  G_DCR_PLANO    := RG_TRATA_DADOS.DCR_PLANO; 
+                                                  --G_OBS          := G_OBS || G_DCR_PLANO;
+                                             
          IF SQL%ROWCOUNT > 0 THEN                                                                                                                                
               V_COUNT := V_COUNT + 1;                                                                                                                                                         
          END IF;
                    
       END LOOP;
-      DBMS_OUTPUT.PUT_LINE('Total de Registros Carregado no Portal: '||V_CONT_TEMP);
+      DBMS_OUTPUT.PUT_LINE('Total de Registros Carregado no Portal: '||G_CONT_TEMP);
+      --
+      --            
       
-      IF V_COUNT = V_CONT_TEMP THEN 
+      -- GERA LOG DO PROCESSAMENTO:
+      BEGIN
+         SELECT COUNT(*) 
+           INTO G_COUNT_LOG
+         FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
+          WHERE TPO_DADO     = G_TPO_DADO
+            AND COD_EMPRS    = G_COD_EMPRS
+            AND DTA_FIM_EXTR = G_DTA_FIM_EXTR
+            AND G_DTA_EMISS  = G_DTA_EMISS;
+      
+        IF (G_COUNT_LOG > 0) THEN
+           
+           G_CKECK := 'I'; -- INSERIDO
+        ELSE
+           G_CKECK := 'E'; -- ERRO       
+        END IF;  
+        
+       EXCEPTION
+         WHEN OTHERS THEN         
+           G_CKECK := 'A'; -- ABEND
+      END;   
+      
+      
+      BEGIN
+         
+          SELECT  SYS_CONTEXT('USERENV', 'MODULE')       AS MODULE
+                 ,SYS_CONTEXT('USERENV', 'OS_USER')      AS OS_USER
+                 ,SYS_CONTEXT('USERENV', 'TERMINAL')     AS TERMINAL
+                 ,SYS_CONTEXT('USERENV', 'CURRENT_USER') AS "CURRENT_USER" 
+                 ,SYS_CONTEXT('USERENV', 'IP_ADDRESS')   AS IP_ADDRESS  
+           INTO   G_MODULE
+                 ,G_OS_USER
+                 ,G_TERMINAL
+                 ,G_CURRENT_USER
+                 ,G_IP_ADDRESS                 
+         FROM DUAL;  
+         
+         DELETE FROM OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO
+         WHERE  TPO_DADO  = G_TPO_DADO
+         AND    COD_EMPRS = G_COD_EMPRS
+         AND    DTA_FIM_EXTR = TO_DATE(G_DTA_FIM_EXTR, 'DD/MM/RRRR')
+         AND    DTA_EMISS = TO_DATE(G_DTA_EMISS, 'DD/MM/RRRR');
+         COMMIT;
+         
+         INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (  COD_LOG_CARGA_EXTRATO
+                                                              ,TPO_DADO
+                                                              ,COD_EMPRS
+                                                              ,DTA_FIM_EXTR
+                                                              ,DTA_EMISS
+                                                              ,QTD_LINHAS
+                                                              ,DT_INCLUSAO
+                                                              ,STATUS
+                                                              ,OBSERVACAO
+                                                               --
+                                                              ,MODULE
+                                                              ,OS_USER
+                                                              ,TERMINAL
+                                                              ,CURRENT_USER
+                                                              ,IP_ADDRESS
+                                                            )
+                                                    VALUES ( OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO_SEQ.NEXTVAL
+                                                              ,G_TPO_DADO            
+                                                              ,G_COD_EMPRS                
+                                                              ,G_DTA_FIM_EXTR  
+                                                              ,G_DTA_EMISS      
+                                                              ,G_CONT_TEMP           
+                                                              ,SYSDATE          
+                                                              ,G_CKECK             
+                                                              ,G_DCR_PLANO
+                                                               --           
+                                                              ,G_MODULE               
+                                                              ,G_OS_USER             
+                                                              ,G_TERMINAL            
+                                                              ,G_CURRENT_USER       
+                                                              ,G_IP_ADDRESS
+                                                           );
+                                                      COMMIT;
+         
+      
+      END;
+                            
+      
+      IF V_COUNT = G_CONT_TEMP THEN 
            R_VALIDA:= TRUE;    
         RETURN R_VALIDA;        
          COMMIT;         
@@ -1620,7 +1627,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                     RETURN R_RENDA_ESTIM_INT;
                   END IF;
                   --
-                ELSE
+                  ELSIF (P_CALC = 4) THEN                
                   --
                   SELECT NVL(SUM(SCPF.VLR_SDANT_SDCTPR + SCPF.VLR_ENTMES_SDCTPR - SCPF.VLR_SAIMES_SDCTPR),0) AS VLR_RES1
                     INTO R_RES1
@@ -1633,10 +1640,10 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                      AND SCPF.COD_UM         = CF.COD_UMARMZ_CTFSS
                      AND PF.NUM_MATR_PARTF   = APPF.NUM_MATR_PARTF
                      --
-                     AND APPF.NUM_PLBNF  = P_NUM_PLBNF -- 19
-                     AND SCPF.NUM_CTFSS  = P_NUM_CTFSS -- 976
-                     AND SCPF.COD_UM     = P_COD_UM    -- 248
-                     AND PF.COD_EMPRS    = P_COD_EMPRS -- IN (40,60)
+                     AND APPF.NUM_PLBNF  = P_NUM_PLBNF 
+                     AND SCPF.NUM_CTFSS  = P_NUM_CTFSS 
+                     AND SCPF.COD_UM     = P_COD_UM    
+                     AND PF.COD_EMPRS    = P_COD_EMPRS 
                      AND SCPF.ANOMES_MOVIM_SDCTPR = TO_NUMBER(TRUNC(TO_CHAR(P_DTA_FIM,'YYYYMM')));
                   --
                   --
@@ -1655,7 +1662,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                          AND R_RES2 IS NOT NULL ) THEN
                       R_RES3 := ROUND(R_RES1 * R_RES2);
                       RETURN NVL(R_RES3,0);
-                    END IF;                                                       
+                    END IF; 
+                ELSE
+                  DBMS_OUTPUT.PUT_LINE('-----------------------');                                                      
                   
                 END IF;
              
@@ -1772,8 +1781,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                INNER JOIN ATT.PARTICIPANTE_FSS           Y  ON Y.COD_EMPRS = X.COD_EMPRS
                                                      AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(X.NUM_RGTRO_EMPRG,1,LENGTH(X.NUM_RGTRO_EMPRG) - 2))
                WHERE X.COD_EMPRS        = P_COD_EMPRESA
-                 AND UPPER(X.DCR_PLANO) = UPPER(P_DCR_PLANO)
-                 --AND Y.NUM_MATR_PARTF = 91687
+                 AND UPPER(X.DCR_PLANO) = UPPER(P_DCR_PLANO)                
                  AND X.DTA_FIM_EXTR     = P_DTA_MOV;
 
 
@@ -1827,9 +1835,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
               IF L_C_UPD > 0 THEN
 
-                 IF (L_COUNT = L_C_UPD) THEN
-                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR('OK'));
-                    --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
+                 IF (L_COUNT = L_C_UPD) THEN                    
+                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
                  END IF;
 
               END IF;
@@ -1892,7 +1899,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
            AND UPPER(X.DCR_PLANO) = UPPER(P_CR_DCR_PLANO)
            --AND Y.NUM_MATR_PARTF   = 79910
            AND X.DTA_FIM_EXTR     = P_DTA_FIM;
-  -- ----------------------------------------------------------------------------------------------------
+  ------------------------------------------------------------------------------------------------------------------------------------------------
     BEGIN
       IF (PDTA_MOV IS NULL) THEN
         -- FC_PRE_TBL_BASE_EXTRAT_CTB
@@ -1961,11 +1968,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                      ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE)
   IS
    
-  --VAR_TESTE BOOLEAN;
   
   BEGIN
-   --VAR_TESTE := FN_TRATA_ARQUIVO;
-   --PRC_CARGA_ARQUIVO('<P_NAME>'); 
       
      IF (P_PRC_PROCESSO = 1) THEN
         --
@@ -1988,3 +1992,4 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;
+/

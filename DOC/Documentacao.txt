@@ -65,7 +65,9 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
  Concluido o o processo de ETL. Efetuar o de para.
 
 
-
+18/05/2021
+ Concluido o processo de Log
+ versão subida para producao PSD-32395
 
 
 
