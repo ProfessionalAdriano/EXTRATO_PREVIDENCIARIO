@@ -69,5 +69,7 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
  Concluido o processo de Log
  versão subida para producao PSD-32395
 
+27/05/2021
+ Adicionado uma nova PK DCR_PLANO
 
 
