@@ -73,3 +73,5 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
  Adicionado uma nova PK DCR_PLANO
 
 
+08/06/2021
+ Teste do processo realizado com sucesso

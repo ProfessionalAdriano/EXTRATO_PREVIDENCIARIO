@@ -1,3 +1,53 @@
+CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
+
+ -- VARIAVEIS
+  G_HOST_NAME    VARCHAR2(64);
+  
+  G_TPO_DADO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE;
+  G_COD_EMPRS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE;
+  G_DTA_FIM_EXTR  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
+  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE;  
+  G_CONT_TEMP     NUMBER := 0;
+  G_COUNT_LOG     NUMBER := 0;
+  G_CKECK         CHAR(1):= '';
+  G_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE;
+  G_OBS           VARCHAR2(100) := 'EXTRATO PREVIDENCIARIO: ';
+  G_MODULE        VARCHAR2(255) := '';
+  G_OS_USER       VARCHAR2(255) := '';
+  G_TERMINAL      VARCHAR2(255) := '';
+  G_CURRENT_USER  VARCHAR2(255) := '';
+  G_IP_ADDRESS    VARCHAR2(255) := '';
+  
+
+  G_ARQ          UTL_FILE.FILE_TYPE;
+  G_DIR          VARCHAR2(50)          := '/dados/oracle/NEWDEV/work';
+  G_READ         CHAR(1)               := 'R';
+  G_SIZE         NUMBER                := 32767;
+
+
+    FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER) RETURN VARCHAR2;
+           
+    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);
+        
+    FUNCTION FN_TRATA_ARQUIVO RETURN BOOLEAN;       
+    
+    PROCEDURE PROC_EXT_PREV_TIETE(  P_COD_EMPRESA   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
+                                   ,P_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
+                                   ,P_DTA_MOV       ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+
+    PROCEDURE PROC_EXT_PREV_ELETROPAULO(  PCOD_EMPRESA ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
+                                         ,PDCR_PLANO   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
+                                         ,PDTA_MOV     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+   
+    PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL
+                                        ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
+
+
+ 
+END PKG_EXT_PREVIDENCIARIO;
+/
 CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -38,42 +88,68 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     PROCEDURE PRC_CARGA_ARQUIVO ( P_NAME_ARQ VARCHAR2 DEFAULT NULL )
     IS
     
-       L_REGISTRO      CLOB;
+       L_REGISTRO      LONG;
        SSQL            CLOB; 
-       
+       SSQL2           LONG;       
+                            
        -- VARIABLE TYPE TABLE:
        REC_CARGA       OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO%ROWTYPE;
           
    
-    BEGIN
-          G_ARQ := UTL_FILE.FOPEN(G_DIR,P_NAME_ARQ,G_READ,G_SIZE);
-                
+    BEGIN       
+    
+          DELETE FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO
+          COMMIT;        
+         
+          G_ARQ := UTL_FILE.FOPEN(G_DIR,P_NAME_ARQ,G_READ,G_SIZE);          
+                                   
           LOOP                
-
+                    
             UTL_FILE.GET_LINE(G_ARQ, L_REGISTRO);
-
+            
           
             IF SUBSTR(L_REGISTRO, 1,1 ) = '1' THEN
-               --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);     
-              
-
-               DELETE FROM OWN_FUNCESP.FC_CARGA_EXTRATO;
-               COMMIT;
-                            
-               SSQL := to_clob(' INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX)' || 
-                       ' with temp as '||
-                       ' ( select ''' || replace(replace(replace (L_REGISTRO, ' ', ''), '''', ' '), ';;','; ;') || '''  DADOS from dual )' ||
+            --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);  
+                        
+            DELETE FROM OWN_FUNCESP.FC_CARGA_EXTRATO;
+            COMMIT;                
+            
+            
+            --L_REGISTRO := replace(replace(replace (replace(L_REGISTRO, '''', ' '), ';;;' , '; ; ; '), ';;','; ;'), '  ', '') ;
+            L_REGISTRO := replace (L_REGISTRO, ';' , '; ') ;
+            /*if length (L_REGISTRO) >4000 then
+              dbms_output.put_line (L_REGISTRO);
+            end if;
+            
+            insert into OWN_FUNCESP.FC_CARGA_EXTRATO (string)
+            values (l_registro);
+            commit; */
+            
+            -- NOVO
+                
+            INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX) 
+            with temp as
+            ( select L_REGISTRO DADOS from dual) 
                
-                       ' select distinct ' ||
+              select distinct 
+                  trim(regexp_substr(t.DADOS, '[^;]+', 1, levels.column_value))  as DADOS, levels.column_value Nivel 
+              from temp t, 
+                table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.DADOS, '[^;]+'))  + 1) as sys.OdciNumberList)) levels;
+             COMMIT;  
+              
+                /*SSQL := to_clob(' INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX)' || 
+                       ' with temp as '||
+                       ' ( select ''' || replace(replace(replace (replace(L_REGISTRO, '''', ' '), ';;;' , '; ; ; '), ';;','; ;'), '  ', '') || '''  DADOS from dual )') ;
+               
+               SSQL2  := TO_CLOB( ' select distinct ' ||
                        '        trim(regexp_substr(t.DADOS, ''[^;]+'', 1, levels.column_value))  as DADOS, levels.column_value Nivel ' ||
                        ' from ' ||
                        '      temp t, ' ||
                        '      table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.DADOS, ''[^;]+''))  + 1) as sys.OdciNumberList)) levels');
                      
-                --dbms_output.put_line (SSQL);   
+                dbms_output.put_line (SSQL);   
               
-                EXECUTE IMMEDIATE(SSQL);
-                COMMIT;
+                EXECUTE IMMEDIATE (SSQL || SSQL2);*/
                                                                                                     
             REC_CARGA.TPO_DADO								              := FUN_CARGA_STAGE(1);
             REC_CARGA.COD_EMPRS                             := FUN_CARGA_STAGE(2);
@@ -304,7 +380,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             WHERE  TPO_DADO         = REC_CARGA.TPO_DADO
             AND    COD_EMPRS        = REC_CARGA.COD_EMPRS
             AND    NUM_RGTRO_EMPRG  = REC_CARGA.NUM_RGTRO_EMPRG
-            AND    DTA_FIM_EXTR     = TO_DATE(REC_CARGA.DTA_FIM_EXTR,'DD/MM/RRRR')
+            AND    DTA_FIM_EXTR     = REC_CARGA.DTA_FIM_EXTR
             AND    DCR_PLANO        = REC_CARGA.DCR_PLANO;
             COMMIT;
          
@@ -569,7 +645,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                 
     IS
       L_TAB_STAGE VARCHAR2(100):= 'TRUNCATE TABLE'||' '|| 'OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO';
-      V_COUNT NUMBER     :=0;
+      V_COUNT NUMBER           :=0;
       R_VALIDA BOOLEAN;
           
       CURSOR C_TRATA_DADOS IS
@@ -962,7 +1038,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                
          
          -- LIMPA A TABELA DE STAGE:                
-         EXECUTE IMMEDIATE(L_TAB_STAGE); 
+         -- EXECUTE IMMEDIATE(L_TAB_STAGE); 
          
          DELETE FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
          WHERE  TPO_DADO         = RG_TRATA_DADOS.TPO_DADO
@@ -1999,3 +2075,4 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;
+
