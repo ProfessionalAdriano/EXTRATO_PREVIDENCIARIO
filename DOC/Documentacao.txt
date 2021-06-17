@@ -75,3 +75,8 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
 
 08/06/2021
  Teste do processo realizado com sucesso
+ 
+ 
+ 17/06/2021:
+ Homologado processo
+ Falta homologar os dados

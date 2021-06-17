@@ -27,7 +27,7 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
     FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER) RETURN VARCHAR2;
            
-    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);
+    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);   
         
     FUNCTION FN_TRATA_ARQUIVO RETURN BOOLEAN;       
     
@@ -42,8 +42,8 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
    
     PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL
-                                        ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
-
+                                        ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL 
+                                        ,P_NAME_ARQ     VARCHAR2 DEFAULT NULL);
 
  
 END PKG_EXT_PREVIDENCIARIO;
@@ -137,19 +137,6 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                 table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.DADOS, '[^;]+'))  + 1) as sys.OdciNumberList)) levels;
              COMMIT;  
               
-                /*SSQL := to_clob(' INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX)' || 
-                       ' with temp as '||
-                       ' ( select ''' || replace(replace(replace (replace(L_REGISTRO, '''', ' '), ';;;' , '; ; ; '), ';;','; ;'), '  ', '') || '''  DADOS from dual )') ;
-               
-               SSQL2  := TO_CLOB( ' select distinct ' ||
-                       '        trim(regexp_substr(t.DADOS, ''[^;]+'', 1, levels.column_value))  as DADOS, levels.column_value Nivel ' ||
-                       ' from ' ||
-                       '      temp t, ' ||
-                       '      table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.DADOS, ''[^;]+''))  + 1) as sys.OdciNumberList)) levels');
-                     
-                dbms_output.put_line (SSQL);   
-              
-                EXECUTE IMMEDIATE (SSQL || SSQL2);*/
                                                                                                     
             REC_CARGA.TPO_DADO								              := FUN_CARGA_STAGE(1);
             REC_CARGA.COD_EMPRS                             := FUN_CARGA_STAGE(2);
@@ -381,6 +368,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             AND    COD_EMPRS        = REC_CARGA.COD_EMPRS
             AND    NUM_RGTRO_EMPRG  = REC_CARGA.NUM_RGTRO_EMPRG
             AND    DTA_FIM_EXTR     = REC_CARGA.DTA_FIM_EXTR
+            AND    DTA_EMISS        = REC_CARGA.DTA_EMISS
             AND    DCR_PLANO        = REC_CARGA.DCR_PLANO;
             COMMIT;
          
@@ -647,52 +635,122 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
       L_TAB_STAGE VARCHAR2(100):= 'TRUNCATE TABLE'||' '|| 'OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO';
       V_COUNT NUMBER           :=0;
       R_VALIDA BOOLEAN;
-          
+      
       CURSOR C_TRATA_DADOS IS
                SELECT DECODE(TO_NUMBER(TPO_DADO),1,2)                                                                     AS TPO_DADO       
                   ,TO_NUMBER(COD_EMPRS)                                                                                   AS COD_EMPRS         
                   ,NUM_RGTRO_EMPRG                                                                                        AS NUM_RGTRO_EMPRG  
-                  ,NOM_EMPRG                                                                                              AS NOM_EMPRG                   
+                  ,NOM_EMPRG                                                                                              AS NOM_EMPRG                                   
                   ,CASE
                       WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JAN' THEN
+                           TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')                                             
+                                                   
+                      WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                           
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '01'  THEN                                                
+                           DTA_EMISS     
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'FEV','FEB'),4,3) = 'FEB' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD/MM/RRRR')                                                     
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD/MM/RRRR')
+                      
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '02'  THEN                                                
+                           DTA_EMISS                           
                        
                       WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                           
+                      WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'MAR' THEN
+                           TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                      
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '03'  THEN                                                
+                           DTA_EMISS     
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'ABR','APR'),4,3) = 'APR' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD/MM/RRRR')
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'ABR','APR'),3,3) = 'APR' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD/MM/RRRR') 
+                      
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '04'  THEN                                                
+                           DTA_EMISS
                         
                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'MAI', 'MAY')),'DD/MM/RRRR')
+                            
+                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'MAI','MAY'),3,3) = 'MAY' THEN
+                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'MAI', 'MAY')),'DD/MM/RRRR')
+                            
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '05'  THEN                                                
+                           DTA_EMISS     
                        
                        WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUN' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR') 
+                            
+                       WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JUN' THEN
+                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                       
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '06'  THEN                                                
+                           DTA_EMISS
                        
                        WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
                         
+                       WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JUL' THEN
+                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                       
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '07'  THEN                                                
+                           DTA_EMISS
+                        
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'AGO','AUG'),4,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD/MM/RRRR')   
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'AGO','AUG'),3,3) = 'AUG' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '08'  THEN                                                
+                           DTA_EMISS   
                         
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'SET','SEP'),4,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'SET', 'SEP')),'DD/MM/RRRR')
                              
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'SET','SEP'),3,3) = 'SEP' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'SET', 'SEP')),'DD/MM/RRRR')
+                        
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '09'  THEN                                                
+                           DTA_EMISS
+                             
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'OUT','OCT'),4,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'OUT', 'OCT')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'OUT','OCT'),3,3) = 'OCT' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'OUT', 'OCT')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '10'  THEN                                                
+                           DTA_EMISS
                         
                         WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'NOV' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')  
                             
+                        WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'NOV' THEN
+                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+                            
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '11'  THEN                                                
+                           DTA_EMISS 
+                            
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'DEZ','DEC'),4,3) = 'DEC' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'DEZ', 'DEC')),'DD/MM/RRRR')
+                        
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'DEZ','DEC'),3,3) = 'DEC' THEN
+                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'DEZ', 'DEC')),'DD/MM/RRRR')
+                            
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '12'  THEN                                                
+                           DTA_EMISS
                             
                    END                                                                                                    AS DTA_EMISS                  
-                  --
-                  --
                   ,NUM_FOLHA                                                                                              AS NUM_FOLHA                                                                          
                   ,DCR_PLANO                                                                                              AS DCR_PLANO
                   ,PER_INIC_EXTR                                                                                          AS PER_INIC_EXTR
@@ -700,38 +758,74 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,CASE
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
+                           
+                      WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JAN' THEN
+                           TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'FEV','FEB'),4,3) = 'FEB' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
                        
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
+                           
+                      WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'MAR' THEN
+                           TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'ABR','APR'),4,3) = 'APR' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'ABR','APR'),3,3) = 'APR' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
                         
                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
+                            
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'MAI','MAY'),3,3) = 'MAY' THEN
+                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
                        
                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JUN' THEN
                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR') 
+                            
+                      WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JUN' THEN
+                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
                        
                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JUL' THEN
+                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
+                            
+                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
                         
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'AGO','AUG'),4,3) = 'AUG' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')   
                         
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'AGO','AUG'),3,3) = 'AUG' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')   
+                        
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'SET','SEP'),4,3) = 'SEP' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'SET','SEP'),3,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
                              
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'OUT','OCT'),4,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'OUT','OCT'),3,3) = 'OCT' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
                         
                         WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'NOV' THEN
                              TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')  
+                             
+                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'NOV' THEN
+                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
                             
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ','DEC'),4,3) = 'DEC' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
+                             
+                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ','DEC'),3,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
                             
                     END                                                                                                   AS DTA_INIC_EXTR                   
@@ -740,38 +834,75 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                     ,CASE
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+                      
+                      WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JAN' THEN
+                           TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'FEV','FEB'),4,3) = 'FEB' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
                        
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+                           
+                      WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'MAR' THEN
+                           TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
                        
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'ABR','APR'),4,3) = 'APR' THEN
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
+                           
+                      WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'ABR','APR'),3,3) = 'APR' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
                         
                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
+                            
+                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'MAI','MAY'),3,3) = 'MAY' THEN
+                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
                        
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JUN' THEN
+                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR') 
+                            
+                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JUN' THEN
                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR') 
                        
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+                            
+                            
+                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JUL' THEN
+                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
                         
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'AGO','AUG'),4,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')   
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR') 
+                             
+                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'AGO','AUG'),3,3) = 'AUG' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')     
                         
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'SET','SEP'),4,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
                              
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'SET','SEP'),3,3) = 'SEP' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
+                             
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'OUT','OCT'),4,3) = 'OCT' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'OUT','OCT'),3,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
                         
                         WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'NOV' THEN
                              TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')  
+                             
+                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'NOV' THEN
+                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')  
                             
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ','DEC'),4,3) = 'DEC' THEN
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
+                             
+                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ','DEC'),3,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
                                                                                                                     
                     END                                                                                                   AS DTA_FIM_EXTR                                         
@@ -999,8 +1130,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 */
 
                   
-            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO;                    
-            
+            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO; 
                                
     BEGIN                      
         
@@ -1016,38 +1146,35 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         END;              
       --
       --
-      
-     
+
          
          
       FOR RG_TRATA_DADOS IN C_TRATA_DADOS 
          LOOP
          
-/*            DBMS_OUTPUT.PUT_LINE(RG.TPO_DADO                                             ||CHR(13)||
-                                 RG.COD_EMPRS                                            ||CHR(13)||
-                                 RG.NUM_RGTRO_EMPRG                                      ||CHR(13)||
-                                 RG.NOM_EMPRG                                            ||CHR(13)||
-                                 TO_CHAR(TO_DATE(RG.DTA_EMISS,'DD/MM/RRRR'),'DD/MM/RRRR')||CHR(13)||
-                                 RG.NUM_FOLHA                                            ||CHR(13)||
-                                 RG.DCR_PLANO                                            ||CHR(13)||
-                                 RG.PER_INIC_EXTR                                        ||CHR(13)||
-                                 RG.PER_FIM_EXTR                                         ||CHR(13)||
-                                 RG.DTA_INIC_EXTR                                        ||CHR(13)||                                                               
-                                 TO_CHAR(RG.DTA_FIM_EXTR,'DD/MM/RRRR')                   ||CHR(13)
+/*            DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.TPO_DADO                                             ||CHR(13)||
+                                 RG_TRATA_DADOS.COD_EMPRS                                            ||CHR(13)||
+                                 RG_TRATA_DADOS.NUM_RGTRO_EMPRG                                      ||CHR(13)||
+                                 RG_TRATA_DADOS.NOM_EMPRG                                            ||CHR(13)||
+                                 RG_TRATA_DADOS.DTA_EMISS
+                                 --RG_TRATA_DADOS.NUM_FOLHA                                            ||CHR(13)||
+                                 --RG_TRATA_DADOS.DCR_PLANO                                            ||CHR(13)||
+                                 --RG_TRATA_DADOS.PER_INIC_EXTR                                        ||CHR(13)||
+                                 --RG_TRATA_DADOS.PER_FIM_EXTR                                         ||CHR(13)||
+                                 --RG_TRATA_DADOS.DTA_INIC_EXTR                                        ||CHR(13)||                                                               
+                                 --TO_CHAR(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')                   ||CHR(13)
                                );  */ 
                                
-         
-         -- LIMPA A TABELA DE STAGE:                
-         -- EXECUTE IMMEDIATE(L_TAB_STAGE); 
-         
+
+           
          DELETE FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
          WHERE  TPO_DADO         = RG_TRATA_DADOS.TPO_DADO
            AND  COD_EMPRS        = RG_TRATA_DADOS.COD_EMPRS
-           AND  NUM_RGTRO_EMPRG  = RG_TRATA_DADOS.NUM_RGTRO_EMPRG
+           AND  NUM_RGTRO_EMPRG  = RG_TRATA_DADOS.NUM_RGTRO_EMPRG           
            AND  DTA_FIM_EXTR     = TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')
            AND  DCR_PLANO        = RG_TRATA_DADOS.DCR_PLANO;
-         COMMIT;        
-         
+         COMMIT;     
+     
          INSERT INTO ATT.FC_PRE_TBL_BASE_EXTRAT_CTB (  TPO_DADO
                                                       ,COD_EMPRS
                                                       ,NUM_RGTRO_EMPRG
@@ -1496,22 +1623,23 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        --,RG_TRATA_DADOS.IDADE_ELEGIB_PORCETAGEM
                                                        --,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PORCETAGEM
                                                        --,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO                                                        
-                                                      );
-                                                 COMMIT;    
+                                                      );                                                                                                      
                                                  
-                                                 
-                                                  G_TPO_DADO     := RG_TRATA_DADOS.TPO_DADO;
-                                                  G_COD_EMPRS    := RG_TRATA_DADOS.COD_EMPRS;
-                                                  G_DTA_FIM_EXTR := TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR');
-                                                  G_DTA_EMISS    := TO_DATE(RG_TRATA_DADOS.DTA_EMISS,'DD/MM/RRRR');
-                                                  G_DCR_PLANO    := RG_TRATA_DADOS.DCR_PLANO;
-                                                  
+         G_TPO_DADO     := RG_TRATA_DADOS.TPO_DADO;
+         G_COD_EMPRS    := RG_TRATA_DADOS.COD_EMPRS;
+         G_DTA_FIM_EXTR := TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR');
+         G_DTA_EMISS    := TO_DATE(RG_TRATA_DADOS.DTA_EMISS,'DD/MM/RRRR');
+         G_DCR_PLANO    := RG_TRATA_DADOS.DCR_PLANO;                                                  
+                               
+         --DBMS_OUTPUT.PUT_LINE(G_DTA_EMISS);                   
+         --DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.DTA_EMISS);
                                              
          IF SQL%ROWCOUNT > 0 THEN                                                                                                                                
               V_COUNT := V_COUNT + 1;                                                                                                                                                         
          END IF;
                    
       END LOOP;
+      COMMIT;
       DBMS_OUTPUT.PUT_LINE('Total de Registros Carregado no Portal: '||G_CONT_TEMP);
       --
       --            
@@ -1523,9 +1651,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
          FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
           WHERE TPO_DADO     = G_TPO_DADO
             AND COD_EMPRS    = G_COD_EMPRS
-            AND DTA_FIM_EXTR = G_DTA_FIM_EXTR
-            AND DTA_EMISS    = G_DTA_EMISS
-            AND DCR_PLANO    = G_DCR_PLANO;
+            AND DTA_FIM_EXTR = G_DTA_FIM_EXTR            
+            AND DCR_PLANO    = G_DCR_PLANO
+            AND DTA_EMISS    = G_DTA_EMISS;
       
         IF (G_COUNT_LOG > 0) THEN
            
@@ -1553,17 +1681,18 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                  ,G_CURRENT_USER
                  ,G_IP_ADDRESS                 
          FROM DUAL;  
-
          
          DELETE FROM OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO
-         WHERE  TPO_DADO  = G_TPO_DADO
-         AND    COD_EMPRS = G_COD_EMPRS
-         AND    DTA_FIM_EXTR = TO_DATE(G_DTA_FIM_EXTR, 'DD/MM/RRRR')
-         AND    DTA_EMISS = TO_DATE(G_DTA_EMISS, 'DD/MM/RRRR')
-         AND    DCR_PLANO = G_DCR_PLANO;
+         WHERE  TPO_DADO     = G_TPO_DADO
+         AND    COD_EMPRS    = G_COD_EMPRS
+         AND    DTA_FIM_EXTR = G_DTA_FIM_EXTR
+         AND    DTA_EMISS    = G_DTA_EMISS
+         AND    DCR_PLANO    = G_DCR_PLANO;
          COMMIT;
+    
          
-         INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (  COD_LOG_CARGA_EXTRATO
+         
+         INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (   COD_LOG_CARGA_EXTRATO
                                                               ,TPO_DADO
                                                               ,COD_EMPRS
                                                               ,DTA_FIM_EXTR
@@ -1584,7 +1713,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                               ,G_TPO_DADO            
                                                               ,G_COD_EMPRS                
                                                               ,G_DTA_FIM_EXTR  
-                                                              ,G_DTA_EMISS      
+                                                              ,G_DTA_EMISS     
                                                               ,G_CONT_TEMP           
                                                               ,SYSDATE          
                                                               ,G_CKECK               
@@ -1916,7 +2045,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
               IF L_C_UPD > 0 THEN
 
                  IF (L_COUNT = L_C_UPD) THEN                    
-                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
+                    --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
+                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(''));
                  END IF;
 
               END IF;
@@ -2031,7 +2161,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
           
           IF L_C_UPD > 0 THEN
             IF (L_C_INS = L_C_UPD) THEN
-              DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(L_C_UPD));
+              --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(L_C_UPD));
+              DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(''));
             END IF;
           END IF;
       END LOOP;
@@ -2044,35 +2175,54 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   END PROC_EXT_PREV_ELETROPAULO;
 
 
-  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
-                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE)
-  IS
-   
-  --VAR_TESTE BOOLEAN;
+  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL  -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
+                                     ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL
+                                     ,P_NAME_ARQ     VARCHAR2 DEFAULT NULL)
+  IS   
+  
+  VAR_FUNC   BOOLEAN;
   
   BEGIN
-   --VAR_TESTE := FN_TRATA_ARQUIVO;
-   --PRC_CARGA_ARQUIVO('<P_NAME>'); 
       
      IF (P_PRC_PROCESSO = 1) THEN
         --
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO; 
         PROC_EXT_PREV_ELETROPAULO(40,'PSAP/ELETROPAULO', P_PRC_DATA); -- ELETROPAULO
+        COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 2) THEN
-        --        
+        --
+        
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
         PROC_EXT_PREV_ELETROPAULO(60,'PSAP/ELETROPAULO', P_PRC_DATA); -- TIM
+        COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 3) THEN
-        --        
-        PROC_EXT_PREV_TIETE(44,'PSAP/TIETE', P_PRC_DATA); -- TIETE
         --
+        
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
+        PROC_EXT_PREV_TIETE(44,'PSAP/TIETE', P_PRC_DATA); -- TIETE
+        COMMIT;
+        --
+        ELSIF (P_PRC_PROCESSO = 4) THEN -- SALDADO: APENAS PLANO CD
+        --
+        
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
+        COMMIT;   
+        --        
         ELSE
         --
-        DBMS_OUTPUT.PUT_LINE('4');
+        
+        DBMS_OUTPUT.PUT_LINE(' - ');
+        DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
+        DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
         --
       END IF;
       
   END PRE_INICIA_PROCESSAMENTO;
   
 END PKG_EXT_PREVIDENCIARIO;
-
