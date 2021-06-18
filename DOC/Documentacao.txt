@@ -77,6 +77,10 @@ Próximo passo, fazer a leitura dos dados no diretório do servidor do banco de 
  Teste do processo realizado com sucesso
  
  
- 17/06/2021:
- Homologado processo
- Falta homologar os dados
+17/06/2021:
+Homologado processo
+Falta homologar os dados
+
+18/06/2021:
+ Implementação do geração do arquivo csv 
+ 

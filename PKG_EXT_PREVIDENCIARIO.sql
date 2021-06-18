@@ -6,28 +6,31 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   G_TPO_DADO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE;
   G_COD_EMPRS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE;
   G_DTA_FIM_EXTR  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
-  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE;  
+  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE; 
+  G_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE;
   G_CONT_TEMP     NUMBER := 0;
   G_COUNT_LOG     NUMBER := 0;
-  G_CKECK         CHAR(1):= '';
-  G_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE;
+  G_CKECK         CHAR(1):= ''; 
   G_OBS           VARCHAR2(100) := 'EXTRATO PREVIDENCIARIO: ';
   G_MODULE        VARCHAR2(255) := '';
   G_OS_USER       VARCHAR2(255) := '';
   G_TERMINAL      VARCHAR2(255) := '';
   G_CURRENT_USER  VARCHAR2(255) := '';
   G_IP_ADDRESS    VARCHAR2(255) := '';
-  
+   
 
   G_ARQ          UTL_FILE.FILE_TYPE;
-  G_DIR          VARCHAR2(50)          := '/dados/oracle/NEWDEV/work';
-  G_READ         CHAR(1)               := 'R';
-  G_SIZE         NUMBER                := 32767;
-
-
+  G_DIR          VARCHAR2(50)   := '/dados/oracle/NEWDEV/work';
+  G_READ         CHAR(1)        := 'R';
+  G_WRITING      CHAR(1)        := 'W';
+  G_SIZE         NUMBER         := 32767;
+  
+  
     FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER) RETURN VARCHAR2;
            
-    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);   
+    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);  
+    
+    PROCEDURE PRC_GERA_ARQ_CSV (P_NAME_ARQ VARCHAR2 DEFAULT NULL); 
         
     FUNCTION FN_TRATA_ARQUIVO RETURN BOOLEAN;       
     
@@ -41,7 +44,7 @@ CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                          ,PDTA_MOV     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
 
    
-    PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL
+    PROCEDURE PRE_INICIA_PROCESSAMENTO(  P_PRC_PROCESSO NUMBER DEFAULT NULL
                                         ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL 
                                         ,P_NAME_ARQ     VARCHAR2 DEFAULT NULL);
 
@@ -85,7 +88,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     
     
     
-    PROCEDURE PRC_CARGA_ARQUIVO ( P_NAME_ARQ VARCHAR2 DEFAULT NULL )
+    PROCEDURE PRC_CARGA_ARQUIVO ( P_NAME_ARQ VARCHAR2 DEFAULT NULL)
     IS
     
        L_REGISTRO      LONG;
@@ -113,19 +116,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                         
             DELETE FROM OWN_FUNCESP.FC_CARGA_EXTRATO;
             COMMIT;                
-            
-            
-            --L_REGISTRO := replace(replace(replace (replace(L_REGISTRO, '''', ' '), ';;;' , '; ; ; '), ';;','; ;'), '  ', '') ;
+                                    
             L_REGISTRO := replace (L_REGISTRO, ';' , '; ') ;
-            /*if length (L_REGISTRO) >4000 then
-              dbms_output.put_line (L_REGISTRO);
-            end if;
-            
-            insert into OWN_FUNCESP.FC_CARGA_EXTRATO (string)
-            values (l_registro);
-            commit; */
-            
-            -- NOVO
                 
             INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX) 
             with temp as
@@ -626,6 +618,737 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     
    
     END PRC_CARGA_ARQUIVO;
+     
+    
+    -- GERA ARQUIVO CSV DO PROCESSAMENTO:
+    PROCEDURE PRC_GERA_ARQ_CSV ( P_NAME_ARQ VARCHAR2 DEFAULT NULL )
+    
+    IS  
+                                  
+     CURSOR CUR_GERA_ARQ_CSV IS
+     
+       SELECT  TPO_DADO
+              ,COD_EMPRS
+              ,NUM_RGTRO_EMPRG
+              ,NOM_EMPRG
+              ,DTA_EMISS
+              ,NUM_FOLHA
+              ,DCR_PLANO
+              ,PER_INIC_EXTR
+              ,PER_FIM_EXTR
+              ,DTA_INIC_EXTR
+              ,DTA_FIM_EXTR
+              ,DCR_SLD_MOV_SALDADO
+              ,SLD_PL_SALDADO_MOV_INIC
+              ,CTB_PL_SALDADO_MOV
+              ,RENT_PL_SALDADO_MOV
+              ,SLD_PL_SALDADO_MOV_FIM
+              ,DCR_SLD_MOV_BD
+              ,SLD_PL_BD_INIC
+              ,CTB_PL_MOV_BD
+              ,RENT_PL_MOV_BD
+              ,SLD_PL_BD_MOV_FIM
+              ,DCR_SLD_MOV_CV
+              ,SLD_PL_CV_MOV_INIC
+              ,CTB_PL_MOV_CV
+              ,RENT_PL_MOV_CV
+              ,SLD_PL_CV_MOV_FIM
+              ,DCR_CTA_OBRIG_PARTIC
+              ,SLD_CTA_OBRIG_PARTIC
+              ,CTB_CTA_OBRIG_PARTIC
+              ,RENT_CTA_OBRIG_PARTIC
+              ,SLD_CTA_OBRIG_PARTIC_FIM
+              ,DCR_CTA_NORM_PATROC
+              ,SLD_CTA_NORM_PATROC
+              ,CTB_CTA_NORM_PATROC
+              ,RENT_NORM_PATROC
+              ,SLD_NORM_PATROC_INIC
+              ,DCR_CTA_ESPEC_PARTIC
+              ,SLD_CTA_ESPEC_PARTIC
+              ,CTB_CTA_ESPEC_PARTIC
+              ,RENT_CTA_ESPEC_PARTIC
+              ,SLD_CTA_ESPEC_PARTIC_INIC
+              ,DCR_CTA_ESPEC_PATROC
+              ,SLD_CTA_ESPEC_PATROC
+              ,CTB_CTA_ESPEC_PATROC
+              ,RENT_CTA_ESPEC_PATROC
+              ,SLD_CTA_ESPEC_PATROC_INIC
+              ,SLD_TOT_INIC
+              ,CTB_TOT_INIC
+              ,RENT_PERIODO
+              ,SLD_TOT_FIM
+              ,PRM_MES_PERIODO_CTB
+              ,SEG_MES_PERIODO_CTB
+              ,TER_MES_PERIODO_CTB
+              ,DCR_TOT_CTB_BD
+              ,VLR_TOT_CTB_BD_PRM_MES
+              ,VLR_TOT_CTB_BD_SEG_MES
+              ,VLR_TOT_CTB_BD_TER_MES
+              ,VLR_TOT_CTB_BD_PERIODO
+              ,DCR_TOT_CTB_CV
+              ,VLR_TOT_CTB_CV_PRM_MES
+              ,VLR_TOT_CTB_CV_SEG_MES
+              ,VLR_TOT_CTB_CV_TER_MES
+              ,VLR_TOT_CTB_CV_PERIODO
+              ,DCR_TPO_CTB_VOL_PARTIC
+              ,VLR_CTB_VOL_PARTIC_PRM_MES
+              ,VLR_CTB_VOL_PARTIC_SEG_MES
+              ,VLR_CTB_VOL_PARTIC_TER_MES
+              ,VLR_CTB_VOL_PARTIC_PERIODO
+              ,DCR_TPO_CTB_VOL_PATROC
+              ,VLR_CTB_VOL_PATROC_PRM_MES
+              ,VLR_CTB_VOL_PATROC_SEG_MES
+              ,VLR_CTB_VOL_PATROC_TER_MES
+              ,VLR_CTB_VOL_PATROC_PERIODO
+              ,DCR_TPO_CTB_OBRIG_PARTIC
+              ,VLR_CTB_OBRIG_PARTIC_PRM_MES
+              ,VLR_CTB_OBRIG_PARTIC_SEG_MES
+              ,VLR_CTB_OBRIG_PARTIC_TER_MES
+              ,VLR_CTB_OBRIG_PARTIC_PERIODO
+              ,DCR_TPO_CTB_OBRIG_PATROC
+              ,VLR_CTB_OBRIG_PATROC_PRM_MES
+              ,VLR_CTB_OBRIG_PATROC_SEG_MES
+              ,VLR_CTB_OBRIG_PATROC_TER_MES
+              ,VLR_CTB_OBRIG_PATROC_PERIODO
+              ,DCR_TPO_CTB_ESPOR_PATROC
+              ,VLR_CTB_ESPOR_PATROC_PRM_MES
+              ,VLR_CTB_ESPOR_PATROC_SEG_MES
+              ,VLR_CTB_ESPOR_PATROC_TER_MES
+              ,VLR_CTB_ESPOR_PATROC_PERIODO
+              ,DCR_TPO_CTB_ESPOR_PARTIC
+              ,VLR_CTB_ESPOR_PARTIC_PRM_MES
+              ,VLR_CTB_ESPOR_PARTIC_SEG_MES
+              ,VLR_CTB_ESPOR_PARTIC_TER_MES
+              ,VLR_CTB_ESPOR_PARTIC_PERIODO
+              ,TOT_CTB_PRM_MES
+              ,TOT_CTB_SEG_MES
+              ,TOT_CTB_TER_MES
+              ,TOT_CTB_EXTRATO
+              ,PRM_MES_PERIODO_RENT
+              ,SEG_MES_PERIODO_RENT
+              ,TER_MES_PERIODO_RENT
+              ,PCT_RENT_REAL_PRM_MES
+              ,PCT_RENT_REAL_SEG_MES
+              ,PCT_RENT_REAL_TER_MES
+              ,PCT_RENT_REAL_TOT_MES
+              ,PCT_RENT_LMTD_PRM_MES
+              ,PCT_RENT_LMTD_SEG_MES
+              ,PCT_RENT_LMTD_TER_MES
+              ,PCT_RENT_LMTD_TOT_MES
+              ,PCT_RENT_IGPDI_PRM_MES
+              ,PCT_RENT_IGPDI_SEG_MES
+              ,PCT_RENT_IGPDI_TER_MES
+              ,PCT_RENT_IGPDI_TOT_MES
+              ,PCT_RENT_URR_PRM_MES
+              ,PCT_RENT_URR_SEG_MES
+              ,PCT_RENT_URR_TER_MES
+              ,PCT_RENT_URR_TOT_MES
+              ,DTA_APOS_PROP
+              ,DTA_APOS_INTE
+              ,VLR_BENEF_PSAP_PROP
+              ,VLR_BENEF_PSAP_INTE
+              ,VLR_BENEF_BD_PROP
+              ,VLR_BENEF_BD_INTE
+              ,VLR_BENEF_CV_PROP
+              ,VLR_BENEF_CV_INTE
+              ,RENDA_ESTIM_PROP
+              ,RENDA_ESTIM_INT
+              ,VLR_RESERV_SALD_LQDA
+              ,TXT_PRM_MENS
+              ,TXT_SEG_MENS
+              ,TXT_TER_MENS
+              ,TXT_QUA_MENS
+              ,IDADE_PROP_BSPS
+              ,VLR_CTB_PROP_BSPS
+              ,IDADE_INT_BSPS
+              ,VLR_CTB_INT_BSPS
+              ,IDADE_PROP_BD
+              ,VLR_CTB_PROP_BD
+              ,IDADE_INT_BD
+              ,VLR_CTB_INT_BD
+              ,IDADE_PROP_CV
+              ,VLR_CTB_PROP_CV
+              ,IDADE_INT_CV
+              ,VLR_CTB_INT_CV
+              ,DCR_COTA_INDEX_PLAN_1
+              ,DCR_COTA_INDEX_PLAN_2
+              ,DCR_CTA_APOS_INDIV_VOL_PARTIC
+              ,SLD_INI_CTA_APO_INDI_VOL_PARTI
+              ,VLR_TOT_CTB_APO_INDI_VOL_PARTI
+              ,REN_TOT_CTB_APO_INDI_VOL_PARTI
+              ,SLD_FIM_CTA_APO_INDI_VOL_PARTI
+              ,DCR_CTA_APOS_INDIV_ESPO_PARTIC
+              ,SLD_INI_CTA_APO_INDI_ESPOPARTI
+              ,VLR_TOT_CTB_APO_INDI_ESPOPARTI
+              ,REN_TOT_CTB_APO_INDI_ESPOPARTI
+              ,SLD_FIM_CTA_APO_INDI_ESPOPARTI
+              ,DCR_CTA_APOS_INDIV_VOL_PATROC
+              ,SLD_INI_CTA_APO_INDI_VOL_PATRO
+              ,VLR_TOT_CTB_APO_INDI_VOL_PATRO
+              ,REN_TOT_CTB_APO_INDI_VOL_PATRO
+              ,SLD_FIM_CTA_APO_INDI_VOL_PATRO
+              ,DCR_CTA_APOS_INDIV_SUPL_PATROC
+              ,SLD_INI_CTA_APO_INDI_SUPLPATRO
+              ,VLR_TOT_CTB_APO_INDI_SUPLPATRO
+              ,REN_TOT_CTB_APO_INDI_SUPLPATRO
+              ,SLD_FIM_CTA_APO_INDI_SUPLPATRO
+              ,DCR_PORT_TOTAL
+              ,SLD_INIC_CTA_PORT_TOT
+              ,VLR_TOT_CTB_PORT_TOT
+              ,RENT_TOT_CTB_PORT_TOT
+              ,SLD_FIM_CTA_PORT_TOT
+              ,DCR_PORT_ABERTA
+              ,SLD_INIC_CTA_PORT_ABERTA
+              ,VLR_TOT_CTB_PORT_ABERTA
+              ,RENT_TOT_CTB_PORT_ABERTA
+              ,SLD_FIM_CTA_PORT_ABERTA
+              ,DCR_PORT_FECHADA
+              ,SLD_INIC_CTA_PORT_FECHADA
+              ,VLR_TOT_CTB_PORT_FECHADA
+              ,RENT_TOT_CTB_PORT_FECHADA
+              ,SLD_FIM_CTA_PORT_FECHADA
+              ,DCR_PORT_JOIA_ABERTA
+              ,SLD_INIC_CTA_PORT_JOIA_ABERTA
+              ,VLR_TOT_CTB_PORT_JOIA_ABERTA
+              ,RENT_TOT_CTB_PORT_JOIA_ABERTA
+              ,SLD_FIM_CTA_PORT_JOIA_ABERTA
+              ,DCR_PORT_JOIA_FECHADA
+              ,SLD_INIC_CTA_PORT_JOIA_FECHADA
+              ,VLR_TOT_CTB_PORT_JOIA_FECHADA
+              ,RENT_TOT_CTB_PORT_JOIA_FECHADA
+              ,SLD_FIM_CTA_PORT_JOIA_FECHADA
+              ,DCR_DISTR_FUND_PREV_PARTIC
+              ,SLD_INI_DIST_FUND_PREV_PARTI
+              ,VLR_TOT_DIST_FUND_PREV_PARTI
+              ,REN_TOT_DIST_FUND_PREV_PARTI
+              ,SLDFIM_CTA_DISTFUNDPREVPARTI
+              ,DCR_DISTR_FUND_PREV_PATROC
+              ,SLD_INI_DIST_FUND_PREV_PATRO
+              ,VLR_TOT_DIST_FUND_PREV_PATRO
+              ,REN_TOT_DIST_FUND_PREV_PATRO
+              ,SLDFIM_CTA_DISTFUNDPREVPATRO
+              ,DCR_PORT_FINAL
+              ,SLD_INIC_CTA_PORT_FIM
+              ,VLR_TOT_CTB_PORT_FIM
+              ,RENT_TOT_CTB_PORT_FIM
+              ,SLD_FIM_CTA_PORT_FIM
+              ,DCR_SLD_PROJETADO
+              ,VLR_SLD_PROJETADO
+              ,VLR_SLD_ADICIONAL
+              ,VLR_BENEF_ADICIONAL
+              ,DTA_ULT_ATUAL
+              ,VLR_CONTRIB_RISCO
+              ,VLR_CONTRIB_PATRC
+              ,VLR_CAPIT_SEGURADO
+              ,VLR_CONTRIB_ADM
+              ,VLR_CONTRIB_ADM_PATRC
+              ,VLR_SIMUL_BENEF_PORCETAGEM
+              ,DTA_ELEGIB_BENEF_PORCETAGEM
+              ,IDADE_ELEGIB_PORCETAGEM
+              ,DTA_EXAURIM_BENEF_PORCETAGEM
+              ,VLR_SIMUL_BENEF_PRAZO
+              ,DTA_ELEGIB_BENEF_PRAZO
+              ,IDADE_ELEGIB_BENEF_PRAZO
+              ,DTA_EXAURIM_BENEF_PRAZO
+       FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB              
+       WHERE TPO_DADO   = G_TPO_DADO --2
+       AND COD_EMPRS    = G_COD_EMPRS --60 
+       AND DTA_FIM_EXTR = TO_DATE(G_DTA_FIM_EXTR, 'DD/MM/RRRR') --TO_DATE('31/03/2021','DD/MM/RRRR')
+       AND DTA_EMISS    = TO_DATE(G_DTA_EMISS, 'DD/MM/RRRR') --TO_DATE('15/04/2021','DD/MM/RRRR')
+       AND DCR_PLANO    = G_DCR_PLANO; --'PSAP/Eletropaulo';
+       
+     BEGIN
+     
+        G_ARQ := UTL_FILE.FOPEN(G_DIR, P_NAME_ARQ, G_WRITING, G_SIZE);                                             
+        UTL_FILE.PUT_LINE(G_ARQ, 'TPO_DADO'							                    ||';'||
+                                 'COD_EMPRS'						                    ||';'||
+                                 'NUM_RGTRO_EMPRG'			                    ||';'||
+                                 'NOM_EMPRG'						                    ||';'||
+                                 'DTA_EMISS'						                    ||';'||
+                                 'NUM_FOLHA'						                    ||';'||
+                                 'DCR_PLANO'						                    ||';'||
+                                 'PER_INIC_EXTR'				                    ||';'||
+                                 'PER_FIM_EXTR'					                    ||';'||
+                                 'DTA_INIC_EXTR'				                    ||';'||
+                                 'DTA_FIM_EXTR'					                    ||';'||
+                                 'DCR_SLD_MOV_SALDADO'			                ||';'||
+                                 'SLD_PL_SALDADO_MOV_INIC'			            ||';'||
+                                 'CTB_PL_SALDADO_MOV'				                ||';'||
+                                 'RENT_PL_SALDADO_MOV'				              ||';'||
+                                 'SLD_PL_SALDADO_MOV_FIM'			              ||';'||
+                                 'DCR_SLD_MOV_BD'					                  ||';'||
+                                 'SLD_PL_BD_INIC'					                  ||';'||
+                                 'CTB_PL_MOV_BD'					                  ||';'||
+                                 'RENT_PL_MOV_BD'					                  ||';'||
+                                 'SLD_PL_BD_MOV_FIM'				                ||';'||
+                                 'DCR_SLD_MOV_CV'					                  ||';'||
+                                 'SLD_PL_CV_MOV_INIC'				                ||';'||
+                                 'CTB_PL_MOV_CV'					                  ||';'||
+                                 'RENT_PL_MOV_CV'					                  ||';'||
+                                 'SLD_PL_CV_MOV_FIM'				                ||';'||
+                                 'DCR_CTA_OBRIG_PARTIC'				              ||';'||
+                                 'SLD_CTA_OBRIG_PARTIC'				              ||';'||
+                                 'CTB_CTA_OBRIG_PARTIC'				              ||';'||
+                                 'RENT_CTA_OBRIG_PARTIC'			              ||';'||
+                                 'SLD_CTA_OBRIG_PARTIC_FIM'			            ||';'||
+                                 'DCR_CTA_NORM_PATROC'				              ||';'||
+                                 'SLD_CTA_NORM_PATROC'				              ||';'||
+                                 'CTB_CTA_NORM_PATROC'				              ||';'||
+                                 'RENT_NORM_PATROC'					                ||';'||
+                                 'SLD_NORM_PATROC_INIC'				              ||';'||
+                                 'DCR_CTA_ESPEC_PARTIC'				              ||';'||
+                                 'SLD_CTA_ESPEC_PARTIC'				              ||';'||
+                                 'CTB_CTA_ESPEC_PARTIC'				              ||';'||
+                                 'RENT_CTA_ESPEC_PARTIC'			              ||';'||
+                                 'SLD_CTA_ESPEC_PARTIC_INIC'		            ||';'||
+                                 'DCR_CTA_ESPEC_PATROC'				              ||';'||
+                                 'SLD_CTA_ESPEC_PATROC'				              ||';'||
+                                 'CTB_CTA_ESPEC_PATROC'				              ||';'||
+                                 'RENT_CTA_ESPEC_PATROC'			              ||';'||
+                                 'SLD_CTA_ESPEC_PATROC_INIC'		            ||';'||
+                                 'SLD_TOT_INIC'						                  ||';'||
+                                 'CTB_TOT_INIC'						                  ||';'||
+                                 'RENT_PERIODO'						                  ||';'||
+                                 'SLD_TOT_FIM'						                  ||';'||
+                                 'PRM_MES_PERIODO_CTB'				              ||';'||
+                                 'SEG_MES_PERIODO_CTB'				              ||';'||
+                                 'TER_MES_PERIODO_CTB'				              ||';'||
+                                 'DCR_TOT_CTB_BD'					                  ||';'||
+                                 'VLR_TOT_CTB_BD_PRM_MES'			              ||';'||
+                                 'VLR_TOT_CTB_BD_SEG_MES'			              ||';'||
+                                 'VLR_TOT_CTB_BD_TER_MES'			              ||';'||
+                                 'VLR_TOT_CTB_BD_PERIODO'			              ||';'||
+                                 'DCR_TOT_CTB_CV'					                  ||';'||
+                                 'VLR_TOT_CTB_CV_PRM_MES'			              ||';'||
+                                 'VLR_TOT_CTB_CV_SEG_MES'			              ||';'||
+                                 'VLR_TOT_CTB_CV_TER_MES'			              ||';'||
+                                 'VLR_TOT_CTB_CV_PERIODO'			              ||';'||
+                                 'DCR_TPO_CTB_VOL_PARTIC'			              ||';'||
+                                 'VLR_CTB_VOL_PARTIC_PRM_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PARTIC_SEG_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PARTIC_TER_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PARTIC_PERIODO'		            ||';'||
+                                 'DCR_TPO_CTB_VOL_PATROC'			              ||';'||
+                                 'VLR_CTB_VOL_PATROC_PRM_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PATROC_SEG_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PATROC_TER_MES'		            ||';'||
+                                 'VLR_CTB_VOL_PATROC_PERIODO'		            ||';'||
+                                 'DCR_TPO_CTB_OBRIG_PARTIC'			            ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_PRM_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_SEG_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_TER_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_PERIODO'		          ||';'||
+                                 'DCR_TPO_CTB_OBRIG_PATROC'			            ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_PRM_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_SEG_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_TER_MES'		          ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_PERIODO'		          ||';'||
+                                 'DCR_TPO_CTB_ESPOR_PATROC'			            ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_PRM_MES'		          ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_SEG_MES'		          ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_TER_MES'	            ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_PERIODO'		          ||';'||
+                                 'DCR_TPO_CTB_ESPOR_PARTIC'			            ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_PRM_MES'		          ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_SEG_MES'		          ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_TER_MES'		          ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_PERIODO'		          ||';'||
+                                 'TOT_CTB_PRM_MES'					                ||';'||
+                                 'TOT_CTB_SEG_MES'					                ||';'||
+                                 'TOT_CTB_TER_MES'					                ||';'||
+                                 'TOT_CTB_EXTRATO'					                ||';'||
+                                 'PRM_MES_PERIODO_RENT'				              ||';'||
+                                 'SEG_MES_PERIODO_RENT'				              ||';'||
+                                 'TER_MES_PERIODO_RENT'				              ||';'||
+                                 'PCT_RENT_REAL_PRM_MES'			              ||';'||
+                                 'PCT_RENT_REAL_SEG_MES'			              ||';'||
+                                 'PCT_RENT_REAL_TER_MES'			              ||';'||
+                                 'PCT_RENT_REAL_TOT_MES'			              ||';'||
+                                 'PCT_RENT_LMTD_PRM_MES'			              ||';'||
+                                 'PCT_RENT_LMTD_SEG_MES'			              ||';'||
+                                 'PCT_RENT_LMTD_TER_MES'			              ||';'||
+                                 'PCT_RENT_LMTD_TOT_MES'			              ||';'||
+                                 'PCT_RENT_IGPDI_PRM_MES'			              ||';'||
+                                 'PCT_RENT_IGPDI_SEG_MES'			              ||';'||
+                                 'PCT_RENT_IGPDI_TER_MES'			              ||';'||
+                                 'PCT_RENT_IGPDI_TOT_MES'			              ||';'||
+                                 'PCT_RENT_URR_PRM_MES'				              ||';'||
+                                 'PCT_RENT_URR_SEG_MES'				              ||';'||
+                                 'PCT_RENT_URR_TER_MES'				              ||';'||
+                                 'PCT_RENT_URR_TOT_MES'				              ||';'||
+                                 'DTA_APOS_PROP'					                  ||';'||
+                                 'DTA_APOS_INTE'					                  ||';'||
+                                 'VLR_BENEF_PSAP_PROP'				              ||';'||
+                                 'VLR_BENEF_PSAP_INTE'				              ||';'||
+                                 'VLR_BENEF_BD_PROP'				                ||';'||
+                                 'VLR_BENEF_BD_INTE'				                ||';'||
+                                 'VLR_BENEF_CV_PROP'				                ||';'||
+                                 'VLR_BENEF_CV_INTE'				                ||';'||
+                                 'RENDA_ESTIM_PROP'					                ||';'||
+                                 'RENDA_ESTIM_INT'					                ||';'||
+                                 'VLR_RESERV_SALD_LQDA'				              ||';'||
+                                 'TXT_PRM_MENS'						                  ||';'||
+                                 'TXT_SEG_MENS'						                  ||';'||
+                                 'TXT_TER_MENS'						                  ||';'||
+                                 'TXT_QUA_MENS'						                  ||';'||
+                                 'IDADE_PROP_BSPS'					                ||';'||
+                                 'VLR_CTB_PROP_BSPS'				                ||';'||
+                                 'IDADE_INT_BSPS'					                  ||';'||
+                                 'VLR_CTB_INT_BSPS'					                ||';'||
+                                 'IDADE_PROP_BD'					                  ||';'||
+                                 'VLR_CTB_PROP_BD'					                ||';'||
+                                 'IDADE_INT_BD'						                  ||';'||
+                                 'VLR_CTB_INT_BD'					                  ||';'||
+                                 'IDADE_PROP_CV'					                  ||';'||
+                                 'VLR_CTB_PROP_CV'					                ||';'||
+                                 'IDADE_INT_CV'						                  ||';'||
+                                 'VLR_CTB_INT_CV'					                  ||';'||
+                                 'DCR_COTA_INDEX_PLAN_1'			              ||';'||
+                                 'DCR_COTA_INDEX_PLAN_2'			              ||';'||
+                                 'DCR_CTA_APOS_INDIV_VOL_PARTIC'	          ||';'||
+                                 'SLD_INI_CTA_APO_INDI_VOL_PARTI'	          ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_VOL_PARTI'	          ||';'||
+                                 'REN_TOT_CTB_APO_INDI_VOL_PARTI'	          ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_VOL_PARTI'	          ||';'||
+                                 'DCR_CTA_APOS_INDIV_ESPO_PARTIC'	          ||';'||
+                                 'SLD_INI_CTA_APO_INDI_ESPOPARTI'	          ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_ESPOPARTI'	          ||';'||
+                                 'REN_TOT_CTB_APO_INDI_ESPOPARTI'	          ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_ESPOPARTI'	          ||';'||
+                                 'DCR_CTA_APOS_INDIV_VOL_PATROC'	          ||';'||
+                                 'SLD_INI_CTA_APO_INDI_VOL_PATRO'	          ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_VOL_PATRO'	          ||';'||
+                                 'REN_TOT_CTB_APO_INDI_VOL_PATRO'	          ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_VOL_PATRO'	          ||';'||
+                                 'DCR_CTA_APOS_INDIV_SUPL_PATROC'	          ||';'||
+                                 'SLD_INI_CTA_APO_INDI_SUPLPATRO'	          ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_SUPLPATRO'	          ||';'||
+                                 'REN_TOT_CTB_APO_INDI_SUPLPATRO'	          ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_SUPLPATRO'	          ||';'||
+                                 'DCR_PORT_TOTAL'					                  ||';'||
+                                 'SLD_INIC_CTA_PORT_TOT'			              ||';'||
+                                 'VLR_TOT_CTB_PORT_TOT'				              ||';'||
+                                 'RENT_TOT_CTB_PORT_TOT'			              ||';'||
+                                 'SLD_FIM_CTA_PORT_TOT'				              ||';'||
+                                 'DCR_PORT_ABERTA'					                ||';'||
+                                 'SLD_INIC_CTA_PORT_ABERTA'			            ||';'||
+                                 'VLR_TOT_CTB_PORT_ABERTA'			            ||';'||
+                                 'RENT_TOT_CTB_PORT_ABERTA'			            ||';'||
+                                 'SLD_FIM_CTA_PORT_ABERTA'			            ||';'||
+                                 'DCR_PORT_FECHADA'					                ||';'||
+                                 'SLD_INIC_CTA_PORT_FECHADA'		            ||';'||
+                                 'VLR_TOT_CTB_PORT_FECHADA'			            ||';'||
+                                 'RENT_TOT_CTB_PORT_FECHADA'		            ||';'||
+                                 'SLD_FIM_CTA_PORT_FECHADA'			            ||';'||
+                                 'DCR_PORT_JOIA_ABERTA'				              ||';'||
+                                 'SLD_INIC_CTA_PORT_JOIA_ABERTA'	          ||';'||
+                                 'VLR_TOT_CTB_PORT_JOIA_ABERTA'		          ||';'||
+                                 'RENT_TOT_CTB_PORT_JOIA_ABERTA'	          ||';'||
+                                 'SLD_FIM_CTA_PORT_JOIA_ABERTA'		          ||';'||
+                                 'DCR_PORT_JOIA_FECHADA'			              ||';'||
+                                 'SLD_INIC_CTA_PORT_JOIA_FECHADA'	          ||';'||
+                                 'VLR_TOT_CTB_PORT_JOIA_FECHADA'	          ||';'||
+                                 'RENT_TOT_CTB_PORT_JOIA_FECHADA'	          ||';'||
+                                 'SLD_FIM_CTA_PORT_JOIA_FECHADA'	          ||';'||
+                                 'DCR_DISTR_FUND_PREV_PARTIC'		            ||';'||
+                                 'SLD_INI_DIST_FUND_PREV_PARTI'		          ||';'||
+                                 'VLR_TOT_DIST_FUND_PREV_PARTI'		          ||';'||
+                                 'REN_TOT_DIST_FUND_PREV_PARTI'		          ||';'||
+                                 'SLDFIM_CTA_DISTFUNDPREVPARTI'		          ||';'||
+                                 'DCR_DISTR_FUND_PREV_PATROC'		            ||';'||
+                                 'SLD_INI_DIST_FUND_PREV_PATRO'		          ||';'||
+                                 'VLR_TOT_DIST_FUND_PREV_PATRO'		          ||';'||
+                                 'REN_TOT_DIST_FUND_PREV_PATRO'		          ||';'||
+                                 'SLDFIM_CTA_DISTFUNDPREVPATRO'		          ||';'||
+                                 'DCR_PORT_FINAL'					                  ||';'||
+                                 'SLD_INIC_CTA_PORT_FIM'			              ||';'||
+                                 'VLR_TOT_CTB_PORT_FIM'				              ||';'||
+                                 'RENT_TOT_CTB_PORT_FIM'			              ||';'||
+                                 'SLD_FIM_CTA_PORT_FIM'				              ||';'||
+                                 'DCR_SLD_PROJETADO'				                ||';'||
+                                 'VLR_SLD_PROJETADO'				                ||';'||
+                                 'VLR_SLD_ADICIONAL'				                ||';'||
+                                 'VLR_BENEF_ADICIONAL'				              ||';'||
+                                 'DTA_ULT_ATUAL'					                  ||';'||
+                                 'VLR_CONTRIB_RISCO'				                ||';'||
+                                 'VLR_CONTRIB_PATRC'				                ||';'||
+                                 'VLR_CAPIT_SEGURADO'				                ||';'||
+                                 'VLR_CONTRIB_ADM'					                ||';'||
+                                 'VLR_CONTRIB_ADM_PATRC'			              ||';'||
+                                 'VLR_SIMUL_BENEF_PORCETAGEM'		            ||';'||
+                                 'DTA_ELEGIB_BENEF_PORCETAGEM'		          ||';'||
+                                 'IDADE_ELEGIB_PORCETAGEM'			            ||';'||
+                                 'DTA_EXAURIM_BENEF_PORCETAGEM'		          ||';'||
+                                 'VLR_SIMUL_BENEF_PRAZO'			              ||';'||
+                                 'DTA_ELEGIB_BENEF_PRAZO'			              ||';'||
+                                 'IDADE_ELEGIB_BENEF_PRAZO'			            ||';'||
+                                 'DTA_EXAURIM_BENEF_PRAZO'                  
+                  );
+        
+        FOR REG_GERA_CSV IN CUR_GERA_ARQ_CSV LOOP
+                       
+         UTL_FILE.PUT_LINE(G_ARQ, REG_GERA_CSV.TPO_DADO					                        || ';' ||
+                                  REG_GERA_CSV.COD_EMPRS                                || ';' ||
+                                  REG_GERA_CSV.NUM_RGTRO_EMPRG                          || ';' ||
+                                  REG_GERA_CSV.NOM_EMPRG                                || ';' ||
+                                  REG_GERA_CSV.DTA_EMISS                                || ';' ||
+                                  REG_GERA_CSV.NUM_FOLHA                                || ';' ||
+                                  REG_GERA_CSV.DCR_PLANO                                || ';' ||
+                                  REG_GERA_CSV.PER_INIC_EXTR                            || ';' ||
+                                  REG_GERA_CSV.PER_FIM_EXTR                             || ';' ||
+                                  REG_GERA_CSV.DTA_INIC_EXTR                            || ';' ||
+                                  REG_GERA_CSV.DTA_FIM_EXTR                             || ';' ||
+                                  REG_GERA_CSV.DCR_SLD_MOV_SALDADO                      || ';' ||
+                                  REG_GERA_CSV.SLD_PL_SALDADO_MOV_INIC                  || ';' ||
+                                  REG_GERA_CSV.CTB_PL_SALDADO_MOV                       || ';' ||
+                                  REG_GERA_CSV.RENT_PL_SALDADO_MOV                      || ';' ||
+                                  REG_GERA_CSV.SLD_PL_SALDADO_MOV_FIM                   || ';' ||
+                                  REG_GERA_CSV.DCR_SLD_MOV_BD                           || ';' ||
+                                  REG_GERA_CSV.SLD_PL_BD_INIC                           || ';' ||
+                                  REG_GERA_CSV.CTB_PL_MOV_BD                            || ';' ||
+                                  REG_GERA_CSV.RENT_PL_MOV_BD                           || ';' ||
+                                  REG_GERA_CSV.SLD_PL_BD_MOV_FIM                        || ';' ||
+                                  REG_GERA_CSV.DCR_SLD_MOV_CV                           || ';' ||
+                                  REG_GERA_CSV.SLD_PL_CV_MOV_INIC                       || ';' ||
+                                  REG_GERA_CSV.CTB_PL_MOV_CV                            || ';' ||
+                                  REG_GERA_CSV.RENT_PL_MOV_CV                           || ';' ||
+                                  REG_GERA_CSV.SLD_PL_CV_MOV_FIM                        || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_OBRIG_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_OBRIG_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.CTB_CTA_OBRIG_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.RENT_CTA_OBRIG_PARTIC                    || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_OBRIG_PARTIC_FIM                 || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_NORM_PATROC                      || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_NORM_PATROC                      || ';' ||
+                                  REG_GERA_CSV.CTB_CTA_NORM_PATROC                      || ';' ||
+                                  REG_GERA_CSV.RENT_NORM_PATROC                         || ';' ||
+                                  REG_GERA_CSV.SLD_NORM_PATROC_INIC                     || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_ESPEC_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_ESPEC_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.CTB_CTA_ESPEC_PARTIC                     || ';' ||
+                                  REG_GERA_CSV.RENT_CTA_ESPEC_PARTIC                    || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_ESPEC_PARTIC_INIC                || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_ESPEC_PATROC                     || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_ESPEC_PATROC                     || ';' ||
+                                  REG_GERA_CSV.CTB_CTA_ESPEC_PATROC                     || ';' ||
+                                  REG_GERA_CSV.RENT_CTA_ESPEC_PATROC                    || ';' ||
+                                  REG_GERA_CSV.SLD_CTA_ESPEC_PATROC_INIC                || ';' ||
+                                  REG_GERA_CSV.SLD_TOT_INIC                             || ';' ||
+                                  REG_GERA_CSV.CTB_TOT_INIC                             || ';' ||
+                                  REG_GERA_CSV.RENT_PERIODO                             || ';' ||
+                                  REG_GERA_CSV.SLD_TOT_FIM                              || ';' ||
+                                  REG_GERA_CSV.PRM_MES_PERIODO_CTB                      || ';' ||
+                                  REG_GERA_CSV.SEG_MES_PERIODO_CTB                      || ';' ||
+                                  REG_GERA_CSV.TER_MES_PERIODO_CTB                      || ';' ||
+                                  REG_GERA_CSV.DCR_TOT_CTB_BD                           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_BD_PRM_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_BD_SEG_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_BD_TER_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_BD_PERIODO                   || ';' ||
+                                  REG_GERA_CSV.DCR_TOT_CTB_CV                           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_CV_PRM_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_CV_SEG_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_CV_TER_MES                   || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_CV_PERIODO                   || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_VOL_PARTIC                   || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PARTIC_PRM_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PARTIC_SEG_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PARTIC_TER_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PARTIC_PERIODO               || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_VOL_PATROC                   || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PATROC_PRM_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PATROC_SEG_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PATROC_TER_MES               || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_VOL_PATROC_PERIODO               || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_OBRIG_PARTIC                 || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PARTIC_PRM_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PARTIC_SEG_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PARTIC_TER_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PARTIC_PERIODO             || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_OBRIG_PATROC                 || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PATROC_PRM_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PATROC_SEG_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PATROC_TER_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_OBRIG_PATROC_PERIODO             || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_ESPOR_PATROC                 || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PATROC_PRM_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PATROC_SEG_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PATROC_TER_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PATROC_PERIODO             || ';' ||
+                                  REG_GERA_CSV.DCR_TPO_CTB_ESPOR_PARTIC                 || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PARTIC_PRM_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PARTIC_SEG_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PARTIC_TER_MES             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_ESPOR_PARTIC_PERIODO             || ';' ||
+                                  REG_GERA_CSV.TOT_CTB_PRM_MES                          || ';' ||
+                                  REG_GERA_CSV.TOT_CTB_SEG_MES                          || ';' ||
+                                  REG_GERA_CSV.TOT_CTB_TER_MES                          || ';' ||
+                                  REG_GERA_CSV.TOT_CTB_EXTRATO                          || ';' ||
+                                  REG_GERA_CSV.PRM_MES_PERIODO_RENT                     || ';' ||
+                                  REG_GERA_CSV.SEG_MES_PERIODO_RENT                     || ';' ||
+                                  REG_GERA_CSV.TER_MES_PERIODO_RENT                     || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_REAL_PRM_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_REAL_SEG_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_REAL_TER_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_REAL_TOT_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_LMTD_PRM_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_LMTD_SEG_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_LMTD_TER_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_LMTD_TOT_MES                    || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_IGPDI_PRM_MES                   || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_IGPDI_SEG_MES                   || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_IGPDI_TER_MES                   || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_IGPDI_TOT_MES                   || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_URR_PRM_MES                     || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_URR_SEG_MES                     || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_URR_TER_MES                     || ';' ||
+                                  REG_GERA_CSV.PCT_RENT_URR_TOT_MES                     || ';' ||
+                                  REG_GERA_CSV.DTA_APOS_PROP                            || ';' ||
+                                  REG_GERA_CSV.DTA_APOS_INTE                            || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_PSAP_PROP                      || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_PSAP_INTE                      || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_BD_PROP                        || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_BD_INTE                        || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_CV_PROP                        || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_CV_INTE                        || ';' ||
+                                  REG_GERA_CSV.RENDA_ESTIM_PROP                         || ';' ||
+                                  REG_GERA_CSV.RENDA_ESTIM_INT                          || ';' ||
+                                  REG_GERA_CSV.VLR_RESERV_SALD_LQDA                     || ';' ||
+                                  REG_GERA_CSV.TXT_PRM_MENS                             || ';' ||
+                                  REG_GERA_CSV.TXT_SEG_MENS                             || ';' ||
+                                  REG_GERA_CSV.TXT_TER_MENS                             || ';' ||
+                                  REG_GERA_CSV.TXT_QUA_MENS                             || ';' ||
+                                  REG_GERA_CSV.IDADE_PROP_BSPS                          || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_PROP_BSPS                        || ';' ||
+                                  REG_GERA_CSV.IDADE_INT_BSPS                           || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_INT_BSPS                         || ';' ||
+                                  REG_GERA_CSV.IDADE_PROP_BD                            || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_PROP_BD                          || ';' ||
+                                  REG_GERA_CSV.IDADE_INT_BD                             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_INT_BD                           || ';' ||
+                                  REG_GERA_CSV.IDADE_PROP_CV                            || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_PROP_CV                          || ';' ||
+                                  REG_GERA_CSV.IDADE_INT_CV                             || ';' ||
+                                  REG_GERA_CSV.VLR_CTB_INT_CV                           || ';' ||
+                                  REG_GERA_CSV.DCR_COTA_INDEX_PLAN_1                    || ';' ||
+                                  REG_GERA_CSV.DCR_COTA_INDEX_PLAN_2                    || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_APOS_INDIV_VOL_PARTIC            || ';' ||
+                                  REG_GERA_CSV.SLD_INI_CTA_APO_INDI_VOL_PARTI           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_APO_INDI_VOL_PARTI           || ';' ||
+                                  REG_GERA_CSV.REN_TOT_CTB_APO_INDI_VOL_PARTI           || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_APO_INDI_VOL_PARTI           || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_APOS_INDIV_ESPO_PARTIC           || ';' ||
+                                  REG_GERA_CSV.SLD_INI_CTA_APO_INDI_ESPOPARTI           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_APO_INDI_ESPOPARTI           || ';' ||
+                                  REG_GERA_CSV.REN_TOT_CTB_APO_INDI_ESPOPARTI           || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_APO_INDI_ESPOPARTI           || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_APOS_INDIV_VOL_PATROC            || ';' ||
+                                  REG_GERA_CSV.SLD_INI_CTA_APO_INDI_VOL_PATRO           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_APO_INDI_VOL_PATRO           || ';' ||
+                                  REG_GERA_CSV.REN_TOT_CTB_APO_INDI_VOL_PATRO           || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_APO_INDI_VOL_PATRO           || ';' ||
+                                  REG_GERA_CSV.DCR_CTA_APOS_INDIV_SUPL_PATROC           || ';' ||
+                                  REG_GERA_CSV.SLD_INI_CTA_APO_INDI_SUPLPATRO           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_APO_INDI_SUPLPATRO           || ';' ||
+                                  REG_GERA_CSV.REN_TOT_CTB_APO_INDI_SUPLPATRO           || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_APO_INDI_SUPLPATRO           || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_TOTAL                           || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_TOT                    || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_TOT                     || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_TOT                    || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_TOT                     || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_ABERTA                          || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_ABERTA                 || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_ABERTA                  || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_ABERTA                 || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_ABERTA                  || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_FECHADA                         || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_FECHADA                || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_FECHADA                 || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_FECHADA                || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_FECHADA                 || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_JOIA_ABERTA                     || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_JOIA_ABERTA            || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_JOIA_ABERTA             || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_JOIA_ABERTA            || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_JOIA_ABERTA             || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_JOIA_FECHADA                    || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_JOIA_FECHADA           || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_JOIA_FECHADA            || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_JOIA_FECHADA           || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_JOIA_FECHADA            || ';' ||
+                                  REG_GERA_CSV.DCR_DISTR_FUND_PREV_PARTIC               || ';' ||
+                                  REG_GERA_CSV.SLD_INI_DIST_FUND_PREV_PARTI             || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_DIST_FUND_PREV_PARTI             || ';' ||
+                                  REG_GERA_CSV.REN_TOT_DIST_FUND_PREV_PARTI             || ';' ||
+                                  REG_GERA_CSV.SLDFIM_CTA_DISTFUNDPREVPARTI             || ';' ||
+                                  REG_GERA_CSV.DCR_DISTR_FUND_PREV_PATROC               || ';' ||
+                                  REG_GERA_CSV.SLD_INI_DIST_FUND_PREV_PATRO             || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_DIST_FUND_PREV_PATRO             || ';' ||
+                                  REG_GERA_CSV.REN_TOT_DIST_FUND_PREV_PATRO             || ';' ||
+                                  REG_GERA_CSV.SLDFIM_CTA_DISTFUNDPREVPATRO             || ';' ||
+                                  REG_GERA_CSV.DCR_PORT_FINAL                           || ';' ||
+                                  REG_GERA_CSV.SLD_INIC_CTA_PORT_FIM                    || ';' ||
+                                  REG_GERA_CSV.VLR_TOT_CTB_PORT_FIM                     || ';' ||
+                                  REG_GERA_CSV.RENT_TOT_CTB_PORT_FIM                    || ';' ||
+                                  REG_GERA_CSV.SLD_FIM_CTA_PORT_FIM                     || ';' ||
+                                  REG_GERA_CSV.DCR_SLD_PROJETADO                        || ';' ||
+                                  REG_GERA_CSV.VLR_SLD_PROJETADO                        || ';' ||
+                                  REG_GERA_CSV.VLR_SLD_ADICIONAL                        || ';' ||
+                                  REG_GERA_CSV.VLR_BENEF_ADICIONAL                      || ';' ||
+                                  REG_GERA_CSV.DTA_ULT_ATUAL                            || ';' ||
+                                  REG_GERA_CSV.VLR_CONTRIB_RISCO                        || ';' ||
+                                  REG_GERA_CSV.VLR_CONTRIB_PATRC                        || ';' ||
+                                  REG_GERA_CSV.VLR_CAPIT_SEGURADO                       || ';' ||
+                                  REG_GERA_CSV.VLR_CONTRIB_ADM                          || ';' ||
+                                  REG_GERA_CSV.VLR_CONTRIB_ADM_PATRC                    || ';' ||
+                                  REG_GERA_CSV.VLR_SIMUL_BENEF_PORCETAGEM               || ';' ||
+                                  REG_GERA_CSV.DTA_ELEGIB_BENEF_PORCETAGEM              || ';' ||
+                                  REG_GERA_CSV.IDADE_ELEGIB_PORCETAGEM                  || ';' ||
+                                  REG_GERA_CSV.DTA_EXAURIM_BENEF_PORCETAGEM             || ';' ||
+                                  REG_GERA_CSV.VLR_SIMUL_BENEF_PRAZO                    || ';' ||
+                                  REG_GERA_CSV.DTA_ELEGIB_BENEF_PRAZO                   || ';' ||
+                                  REG_GERA_CSV.IDADE_ELEGIB_BENEF_PRAZO                 || ';' ||
+                                  REG_GERA_CSV.DTA_EXAURIM_BENEF_PRAZO                  || ';'
+                           );
+        
+        END LOOP;          
+
+      UTL_FILE.FCLOSE(G_ARQ); 
+      DBMS_OUTPUT.PUT_LINE('Arquivo csv gerado com sucesso!');
+      EXCEPTION
+        WHEN UTL_FILE.INVALID_PATH THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('Diretório Inválido');
+        WHEN UTL_FILE.INVALID_OPERATION THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('Operação invalida no arquivo'); 
+        WHEN UTL_FILE.WRITE_ERROR THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('Erro de gravação no arquivo'); 
+        WHEN UTL_FILE.INVALID_MODE THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('Modo de acesso inválido');
+        WHEN No_data_found THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('Arquivo: '||P_NAME_ARQ);
+        WHEN OTHERS THEN
+            UTL_FILE.FCLOSE(G_ARQ);
+            DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
+    
+   
+    END PRC_GERA_ARQ_CSV;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
    
    
     FUNCTION FN_TRATA_ARQUIVO
@@ -2046,7 +2769,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
                  IF (L_COUNT = L_C_UPD) THEN                    
                     --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
-                    DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(''));
+                    DBMS_OUTPUT.PUT_LINE('');
                  END IF;
 
               END IF;
@@ -2162,7 +2885,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
           IF L_C_UPD > 0 THEN
             IF (L_C_INS = L_C_UPD) THEN
               --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(L_C_UPD));
-              DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(''));
+              DBMS_OUTPUT.PUT_LINE('');
             END IF;
           END IF;
       END LOOP;
@@ -2189,6 +2912,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
         VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO; 
         PROC_EXT_PREV_ELETROPAULO(40,'PSAP/ELETROPAULO', P_PRC_DATA); -- ELETROPAULO
+        PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 2) THEN
@@ -2197,6 +2921,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
         VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
         PROC_EXT_PREV_ELETROPAULO(60,'PSAP/ELETROPAULO', P_PRC_DATA); -- TIM
+        PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 3) THEN
@@ -2205,6 +2930,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
         VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
         PROC_EXT_PREV_TIETE(44,'PSAP/TIETE', P_PRC_DATA); -- TIETE
+        PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 4) THEN -- SALDADO: APENAS PLANO CD
@@ -2212,6 +2938,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         
         PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
         VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
+        PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;   
         --        
         ELSE
