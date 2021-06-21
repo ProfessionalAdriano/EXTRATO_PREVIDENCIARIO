@@ -1339,17 +1339,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
     
    
     END PRC_GERA_ARQ_CSV;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-   
+  
    
     FUNCTION FN_TRATA_ARQUIVO
       RETURN BOOLEAN

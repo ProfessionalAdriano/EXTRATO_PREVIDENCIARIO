@@ -84,3 +84,6 @@ Falta homologar os dados
 18/06/2021:
  Implementação do geração do arquivo csv 
  
+21/06/2021:
+ Fim do desenvolvimento - back-end
+ 
