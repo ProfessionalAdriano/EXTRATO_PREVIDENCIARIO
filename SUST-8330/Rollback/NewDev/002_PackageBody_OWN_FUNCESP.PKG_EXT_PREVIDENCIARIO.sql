@@ -1,56 +1,14 @@
-CREATE OR REPLACE PACKAGE OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
+SET ECHO ON
+SET TIME ON
+SET TIMING ON
+SET SQLBL ON
+SET SERVEROUTPUT ON SIZE 1000000
+SET DEFINE OFF
+SHOW USER
+SELECT * FROM GLOBAL_NAME;
+SELECT INSTANCE_NAME, HOST_NAME FROM V$INSTANCE;
+SELECT TO_CHAR(SYSDATE,'DD/MM/YYYY HH24:MI:SS') DATA FROM DUAL;
 
- -- VARIAVEIS
-  G_HOST_NAME    VARCHAR2(64);
-  
-  G_TPO_DADO      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.TPO_DADO%TYPE;
-  G_COD_EMPRS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE;
-  G_DTA_FIM_EXTR  ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
-  G_DTA_EMISS     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_EMISS%TYPE; 
-  G_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE;
-  G_CONT_TEMP     NUMBER := 0;
-  G_COUNT_LOG     NUMBER := 0;
-  G_CKECK         CHAR(1):= ''; 
-  G_OBS           VARCHAR2(100) := 'EXTRATO PREVIDENCIARIO: ';
-  G_MODULE        VARCHAR2(255) := '';
-  G_OS_USER       VARCHAR2(255) := '';
-  G_TERMINAL      VARCHAR2(255) := '';
-  G_CURRENT_USER  VARCHAR2(255) := '';
-  G_IP_ADDRESS    VARCHAR2(255) := '';
-   
-
-  G_ARQ          UTL_FILE.FILE_TYPE;
-  G_DIR          VARCHAR2(50)   := '/dados/oracle/NEWDEV/work';
-  G_READ         CHAR(1)        := 'R';
-  G_WRITING      CHAR(1)        := 'W';
-  G_SIZE         NUMBER         := 32767;
-  
-  
-    FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER) RETURN VARCHAR2;
-           
-    PROCEDURE PRC_CARGA_ARQUIVO (P_NAME_ARQ VARCHAR2 DEFAULT NULL);  
-    
-    PROCEDURE PRC_GERA_ARQ_CSV (P_NAME_ARQ VARCHAR2 DEFAULT NULL); 
-        
-    FUNCTION FN_TRATA_ARQUIVO RETURN BOOLEAN;       
-    
-    PROCEDURE PROC_EXT_PREV_TIETE(  P_COD_EMPRESA   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
-                                   ,P_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
-                                   ,P_DTA_MOV       ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
-
-
-    PROCEDURE PROC_EXT_PREV_ELETROPAULO(  PCOD_EMPRESA ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
-                                         ,PDCR_PLANO   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
-                                         ,PDTA_MOV     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL);
-
-   
-    PROCEDURE PRE_INICIA_PROCESSAMENTO(  P_PRC_PROCESSO NUMBER DEFAULT NULL
-                                        ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL 
-                                        ,P_NAME_ARQ     VARCHAR2 DEFAULT NULL);
-
- 
-END PKG_EXT_PREVIDENCIARIO;
-/
 CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -58,79 +16,80 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 -- DESCRICAO   : GERACAO DOS EXTRATO PREVIDENCIARIO DOS SALDADOS - PSAP/ELETROPAULO, TIM, PSAP/TIETE
 -- ANALISTA    : ADRIANO LIMA
 -- DATA CRIACAO: 26/04/2021
--- MANUTENCOES : 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                           
-    
+-- MANUTENCOES : 26/07/2021 - ADICIONADO O COMMIT NO CODIGO FONTE
+-- MANUTENCOES : 18/08/2021 - PSD-39952 EFETUADO ALTERACAO NO OBJETO FUN_CALC_VLR: CALCULA VLR_DR E PUBLICACAO DO EXTRATO PREV.
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION FUN_CARGA_STAGE (P_CALCULO NUMBER)
     RETURN VARCHAR2 IS
-        
-    VCAMPO VARCHAR2(2000);    
-      
+
+    VCAMPO VARCHAR2(2000);
+
     BEGIN
-    
-       BEGIN    
+
+       BEGIN
           SELECT NVL(DADO, ' ')
             INTO VCAMPO
             FROM OWN_FUNCESP.FC_CARGA_EXTRATO
-           WHERE INDX = P_CALCULO;  
-           
+           WHERE INDX = P_CALCULO;
+
         EXCEPTION WHEN NO_DATA_FOUND THEN
           VCAMPO := ' ';
-        END;        
-        RETURN VCAMPO;                        
-     
+        END;
+        RETURN VCAMPO;
+
         EXCEPTION
           WHEN OTHERS THEN
            DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
            DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-    
+
     END FUN_CARGA_STAGE;
-    
-    
-    
+
+
+
     PROCEDURE PRC_CARGA_ARQUIVO ( P_NAME_ARQ VARCHAR2 DEFAULT NULL)
     IS
-    
+
        L_REGISTRO      LONG;
-       SSQL            CLOB; 
-       SSQL2           LONG;       
-                            
+       SSQL            CLOB;
+       SSQL2           LONG;
+
        -- VARIABLE TYPE TABLE:
        REC_CARGA       OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO%ROWTYPE;
-          
-   
-    BEGIN       
-    
+
+
+    BEGIN
+
           DELETE FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO
-          COMMIT;        
-         
-          G_ARQ := UTL_FILE.FOPEN(G_DIR,P_NAME_ARQ,G_READ,G_SIZE);          
-                                   
-          LOOP                
-                    
+          COMMIT;
+
+          G_ARQ := UTL_FILE.FOPEN(G_DIR,P_NAME_ARQ,G_READ,G_SIZE);
+
+          LOOP
+
             UTL_FILE.GET_LINE(G_ARQ, L_REGISTRO);
-            
-          
+
+
             IF SUBSTR(L_REGISTRO, 1,1 ) = '1' THEN
-            --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);  
-                        
+            --DBMS_OUTPUT.PUT_LINE(L_REGISTRO);
+
             DELETE FROM OWN_FUNCESP.FC_CARGA_EXTRATO;
-            COMMIT;                
-                                    
+            COMMIT;
+
             L_REGISTRO := replace (L_REGISTRO, ';' , '; ') ;
-                
-            INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX) 
+
+            INSERT INTO OWN_FUNCESP.FC_CARGA_EXTRATO (DADO, INDX)
             with temp as
-            ( select L_REGISTRO DADOS from dual) 
-               
-              select distinct 
-                  trim(regexp_substr(t.DADOS, '[^;]+', 1, levels.column_value))  as DADOS, levels.column_value Nivel 
-              from temp t, 
+            ( select L_REGISTRO DADOS from dual)
+
+              select distinct
+                  trim(regexp_substr(t.DADOS, '[^;]+', 1, levels.column_value))  as DADOS, levels.column_value Nivel
+              from temp t,
                 table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.DADOS, '[^;]+'))  + 1) as sys.OdciNumberList)) levels;
-             COMMIT;  
-              
-                                                                                                    
-            REC_CARGA.TPO_DADO								              := FUN_CARGA_STAGE(1);
+             COMMIT;
+
+
+            REC_CARGA.TPO_DADO                              := FUN_CARGA_STAGE(1);
             REC_CARGA.COD_EMPRS                             := FUN_CARGA_STAGE(2);
             REC_CARGA.NUM_RGTRO_EMPRG                       := FUN_CARGA_STAGE(3);
             REC_CARGA.NOM_EMPRG                             := FUN_CARGA_STAGE(4);
@@ -363,7 +322,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             AND    DTA_EMISS        = REC_CARGA.DTA_EMISS
             AND    DCR_PLANO        = REC_CARGA.DCR_PLANO;
             COMMIT;
-         
+
             INSERT INTO OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO VALUES (  REC_CARGA.TPO_DADO
                                                                       ,REC_CARGA.COD_EMPRS
                                                                       ,REC_CARGA.NUM_RGTRO_EMPRG
@@ -589,25 +548,25 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                                       ,REC_CARGA.DTA_EXAURIM_BENEF_PRAZO
                                                                      );
                                                                 COMMIT;
-                                                                
-            END IF;  
-            
-          END LOOP;        
-          
-          UTL_FILE.FCLOSE(G_ARQ); 
+
+            END IF;
+
+          END LOOP;
+
+          UTL_FILE.FCLOSE(G_ARQ);
       EXCEPTION
         WHEN UTL_FILE.INVALID_PATH THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Diretório Inválido');
+            DBMS_OUTPUT.PUT_LINE('DiretÃƒÂ³rio InvÃƒÂ¡lido');
         WHEN UTL_FILE.INVALID_OPERATION THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Operação invalida no arquivo'); 
+            DBMS_OUTPUT.PUT_LINE('OperaÃƒÂ§ÃƒÂ£o invalida no arquivo');
         WHEN UTL_FILE.WRITE_ERROR THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Erro de gravação no arquivo'); 
+            DBMS_OUTPUT.PUT_LINE('Erro de gravaÃƒÂ§ÃƒÂ£o no arquivo');
         WHEN UTL_FILE.INVALID_MODE THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Modo de acesso inválido');
+            DBMS_OUTPUT.PUT_LINE('Modo de acesso invÃƒÂ¡lido');
         WHEN No_data_found THEN
             UTL_FILE.FCLOSE(G_ARQ);
             DBMS_OUTPUT.PUT_LINE('Arquivo: '||P_NAME_ARQ);
@@ -615,18 +574,18 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             UTL_FILE.FCLOSE(G_ARQ);
             DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
             DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-    
-   
+
+
     END PRC_CARGA_ARQUIVO;
-     
-    
+
+
     -- GERA ARQUIVO CSV DO PROCESSAMENTO:
     PROCEDURE PRC_GERA_ARQ_CSV ( P_NAME_ARQ VARCHAR2 DEFAULT NULL )
-    
-    IS  
-                                  
+
+    IS
+
      CURSOR CUR_GERA_ARQ_CSV IS
-     
+
        SELECT  TPO_DADO
               ,COD_EMPRS
               ,NUM_RGTRO_EMPRG
@@ -850,244 +809,244 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
               ,DTA_ELEGIB_BENEF_PRAZO
               ,IDADE_ELEGIB_BENEF_PRAZO
               ,DTA_EXAURIM_BENEF_PRAZO
-       FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB              
+       FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
        WHERE TPO_DADO   = G_TPO_DADO --2
-       AND COD_EMPRS    = G_COD_EMPRS --60 
+       AND COD_EMPRS    = G_COD_EMPRS --60
        AND DTA_FIM_EXTR = TO_DATE(G_DTA_FIM_EXTR, 'DD/MM/RRRR') --TO_DATE('31/03/2021','DD/MM/RRRR')
        AND DTA_EMISS    = TO_DATE(G_DTA_EMISS, 'DD/MM/RRRR') --TO_DATE('15/04/2021','DD/MM/RRRR')
        AND DCR_PLANO    = G_DCR_PLANO; --'PSAP/Eletropaulo';
-       
+
      BEGIN
-     
-        G_ARQ := UTL_FILE.FOPEN(G_DIR, P_NAME_ARQ, G_WRITING, G_SIZE);                                             
-        UTL_FILE.PUT_LINE(G_ARQ, 'TPO_DADO'							                    ||';'||
-                                 'COD_EMPRS'						                    ||';'||
-                                 'NUM_RGTRO_EMPRG'			                    ||';'||
-                                 'NOM_EMPRG'						                    ||';'||
-                                 'DTA_EMISS'						                    ||';'||
-                                 'NUM_FOLHA'						                    ||';'||
-                                 'DCR_PLANO'						                    ||';'||
-                                 'PER_INIC_EXTR'				                    ||';'||
-                                 'PER_FIM_EXTR'					                    ||';'||
-                                 'DTA_INIC_EXTR'				                    ||';'||
-                                 'DTA_FIM_EXTR'					                    ||';'||
-                                 'DCR_SLD_MOV_SALDADO'			                ||';'||
-                                 'SLD_PL_SALDADO_MOV_INIC'			            ||';'||
-                                 'CTB_PL_SALDADO_MOV'				                ||';'||
-                                 'RENT_PL_SALDADO_MOV'				              ||';'||
-                                 'SLD_PL_SALDADO_MOV_FIM'			              ||';'||
-                                 'DCR_SLD_MOV_BD'					                  ||';'||
-                                 'SLD_PL_BD_INIC'					                  ||';'||
-                                 'CTB_PL_MOV_BD'					                  ||';'||
-                                 'RENT_PL_MOV_BD'					                  ||';'||
-                                 'SLD_PL_BD_MOV_FIM'				                ||';'||
-                                 'DCR_SLD_MOV_CV'					                  ||';'||
-                                 'SLD_PL_CV_MOV_INIC'				                ||';'||
-                                 'CTB_PL_MOV_CV'					                  ||';'||
-                                 'RENT_PL_MOV_CV'					                  ||';'||
-                                 'SLD_PL_CV_MOV_FIM'				                ||';'||
-                                 'DCR_CTA_OBRIG_PARTIC'				              ||';'||
-                                 'SLD_CTA_OBRIG_PARTIC'				              ||';'||
-                                 'CTB_CTA_OBRIG_PARTIC'				              ||';'||
-                                 'RENT_CTA_OBRIG_PARTIC'			              ||';'||
-                                 'SLD_CTA_OBRIG_PARTIC_FIM'			            ||';'||
-                                 'DCR_CTA_NORM_PATROC'				              ||';'||
-                                 'SLD_CTA_NORM_PATROC'				              ||';'||
-                                 'CTB_CTA_NORM_PATROC'				              ||';'||
-                                 'RENT_NORM_PATROC'					                ||';'||
-                                 'SLD_NORM_PATROC_INIC'				              ||';'||
-                                 'DCR_CTA_ESPEC_PARTIC'				              ||';'||
-                                 'SLD_CTA_ESPEC_PARTIC'				              ||';'||
-                                 'CTB_CTA_ESPEC_PARTIC'				              ||';'||
-                                 'RENT_CTA_ESPEC_PARTIC'			              ||';'||
-                                 'SLD_CTA_ESPEC_PARTIC_INIC'		            ||';'||
-                                 'DCR_CTA_ESPEC_PATROC'				              ||';'||
-                                 'SLD_CTA_ESPEC_PATROC'				              ||';'||
-                                 'CTB_CTA_ESPEC_PATROC'				              ||';'||
-                                 'RENT_CTA_ESPEC_PATROC'			              ||';'||
-                                 'SLD_CTA_ESPEC_PATROC_INIC'		            ||';'||
-                                 'SLD_TOT_INIC'						                  ||';'||
-                                 'CTB_TOT_INIC'						                  ||';'||
-                                 'RENT_PERIODO'						                  ||';'||
-                                 'SLD_TOT_FIM'						                  ||';'||
-                                 'PRM_MES_PERIODO_CTB'				              ||';'||
-                                 'SEG_MES_PERIODO_CTB'				              ||';'||
-                                 'TER_MES_PERIODO_CTB'				              ||';'||
-                                 'DCR_TOT_CTB_BD'					                  ||';'||
-                                 'VLR_TOT_CTB_BD_PRM_MES'			              ||';'||
-                                 'VLR_TOT_CTB_BD_SEG_MES'			              ||';'||
-                                 'VLR_TOT_CTB_BD_TER_MES'			              ||';'||
-                                 'VLR_TOT_CTB_BD_PERIODO'			              ||';'||
-                                 'DCR_TOT_CTB_CV'					                  ||';'||
-                                 'VLR_TOT_CTB_CV_PRM_MES'			              ||';'||
-                                 'VLR_TOT_CTB_CV_SEG_MES'			              ||';'||
-                                 'VLR_TOT_CTB_CV_TER_MES'			              ||';'||
-                                 'VLR_TOT_CTB_CV_PERIODO'			              ||';'||
-                                 'DCR_TPO_CTB_VOL_PARTIC'			              ||';'||
-                                 'VLR_CTB_VOL_PARTIC_PRM_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PARTIC_SEG_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PARTIC_TER_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PARTIC_PERIODO'		            ||';'||
-                                 'DCR_TPO_CTB_VOL_PATROC'			              ||';'||
-                                 'VLR_CTB_VOL_PATROC_PRM_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PATROC_SEG_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PATROC_TER_MES'		            ||';'||
-                                 'VLR_CTB_VOL_PATROC_PERIODO'		            ||';'||
-                                 'DCR_TPO_CTB_OBRIG_PARTIC'			            ||';'||
-                                 'VLR_CTB_OBRIG_PARTIC_PRM_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PARTIC_SEG_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PARTIC_TER_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PARTIC_PERIODO'		          ||';'||
-                                 'DCR_TPO_CTB_OBRIG_PATROC'			            ||';'||
-                                 'VLR_CTB_OBRIG_PATROC_PRM_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PATROC_SEG_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PATROC_TER_MES'		          ||';'||
-                                 'VLR_CTB_OBRIG_PATROC_PERIODO'		          ||';'||
-                                 'DCR_TPO_CTB_ESPOR_PATROC'			            ||';'||
-                                 'VLR_CTB_ESPOR_PATROC_PRM_MES'		          ||';'||
-                                 'VLR_CTB_ESPOR_PATROC_SEG_MES'		          ||';'||
-                                 'VLR_CTB_ESPOR_PATROC_TER_MES'	            ||';'||
-                                 'VLR_CTB_ESPOR_PATROC_PERIODO'		          ||';'||
-                                 'DCR_TPO_CTB_ESPOR_PARTIC'			            ||';'||
-                                 'VLR_CTB_ESPOR_PARTIC_PRM_MES'		          ||';'||
-                                 'VLR_CTB_ESPOR_PARTIC_SEG_MES'		          ||';'||
-                                 'VLR_CTB_ESPOR_PARTIC_TER_MES'		          ||';'||
-                                 'VLR_CTB_ESPOR_PARTIC_PERIODO'		          ||';'||
-                                 'TOT_CTB_PRM_MES'					                ||';'||
-                                 'TOT_CTB_SEG_MES'					                ||';'||
-                                 'TOT_CTB_TER_MES'					                ||';'||
-                                 'TOT_CTB_EXTRATO'					                ||';'||
-                                 'PRM_MES_PERIODO_RENT'				              ||';'||
-                                 'SEG_MES_PERIODO_RENT'				              ||';'||
-                                 'TER_MES_PERIODO_RENT'				              ||';'||
-                                 'PCT_RENT_REAL_PRM_MES'			              ||';'||
-                                 'PCT_RENT_REAL_SEG_MES'			              ||';'||
-                                 'PCT_RENT_REAL_TER_MES'			              ||';'||
-                                 'PCT_RENT_REAL_TOT_MES'			              ||';'||
-                                 'PCT_RENT_LMTD_PRM_MES'			              ||';'||
-                                 'PCT_RENT_LMTD_SEG_MES'			              ||';'||
-                                 'PCT_RENT_LMTD_TER_MES'			              ||';'||
-                                 'PCT_RENT_LMTD_TOT_MES'			              ||';'||
-                                 'PCT_RENT_IGPDI_PRM_MES'			              ||';'||
-                                 'PCT_RENT_IGPDI_SEG_MES'			              ||';'||
-                                 'PCT_RENT_IGPDI_TER_MES'			              ||';'||
-                                 'PCT_RENT_IGPDI_TOT_MES'			              ||';'||
-                                 'PCT_RENT_URR_PRM_MES'				              ||';'||
-                                 'PCT_RENT_URR_SEG_MES'				              ||';'||
-                                 'PCT_RENT_URR_TER_MES'				              ||';'||
-                                 'PCT_RENT_URR_TOT_MES'				              ||';'||
-                                 'DTA_APOS_PROP'					                  ||';'||
-                                 'DTA_APOS_INTE'					                  ||';'||
-                                 'VLR_BENEF_PSAP_PROP'				              ||';'||
-                                 'VLR_BENEF_PSAP_INTE'				              ||';'||
-                                 'VLR_BENEF_BD_PROP'				                ||';'||
-                                 'VLR_BENEF_BD_INTE'				                ||';'||
-                                 'VLR_BENEF_CV_PROP'				                ||';'||
-                                 'VLR_BENEF_CV_INTE'				                ||';'||
-                                 'RENDA_ESTIM_PROP'					                ||';'||
-                                 'RENDA_ESTIM_INT'					                ||';'||
-                                 'VLR_RESERV_SALD_LQDA'				              ||';'||
-                                 'TXT_PRM_MENS'						                  ||';'||
-                                 'TXT_SEG_MENS'						                  ||';'||
-                                 'TXT_TER_MENS'						                  ||';'||
-                                 'TXT_QUA_MENS'						                  ||';'||
-                                 'IDADE_PROP_BSPS'					                ||';'||
-                                 'VLR_CTB_PROP_BSPS'				                ||';'||
-                                 'IDADE_INT_BSPS'					                  ||';'||
-                                 'VLR_CTB_INT_BSPS'					                ||';'||
-                                 'IDADE_PROP_BD'					                  ||';'||
-                                 'VLR_CTB_PROP_BD'					                ||';'||
-                                 'IDADE_INT_BD'						                  ||';'||
-                                 'VLR_CTB_INT_BD'					                  ||';'||
-                                 'IDADE_PROP_CV'					                  ||';'||
-                                 'VLR_CTB_PROP_CV'					                ||';'||
-                                 'IDADE_INT_CV'						                  ||';'||
-                                 'VLR_CTB_INT_CV'					                  ||';'||
-                                 'DCR_COTA_INDEX_PLAN_1'			              ||';'||
-                                 'DCR_COTA_INDEX_PLAN_2'			              ||';'||
-                                 'DCR_CTA_APOS_INDIV_VOL_PARTIC'	          ||';'||
-                                 'SLD_INI_CTA_APO_INDI_VOL_PARTI'	          ||';'||
-                                 'VLR_TOT_CTB_APO_INDI_VOL_PARTI'	          ||';'||
-                                 'REN_TOT_CTB_APO_INDI_VOL_PARTI'	          ||';'||
-                                 'SLD_FIM_CTA_APO_INDI_VOL_PARTI'	          ||';'||
-                                 'DCR_CTA_APOS_INDIV_ESPO_PARTIC'	          ||';'||
-                                 'SLD_INI_CTA_APO_INDI_ESPOPARTI'	          ||';'||
-                                 'VLR_TOT_CTB_APO_INDI_ESPOPARTI'	          ||';'||
-                                 'REN_TOT_CTB_APO_INDI_ESPOPARTI'	          ||';'||
-                                 'SLD_FIM_CTA_APO_INDI_ESPOPARTI'	          ||';'||
-                                 'DCR_CTA_APOS_INDIV_VOL_PATROC'	          ||';'||
-                                 'SLD_INI_CTA_APO_INDI_VOL_PATRO'	          ||';'||
-                                 'VLR_TOT_CTB_APO_INDI_VOL_PATRO'	          ||';'||
-                                 'REN_TOT_CTB_APO_INDI_VOL_PATRO'	          ||';'||
-                                 'SLD_FIM_CTA_APO_INDI_VOL_PATRO'	          ||';'||
-                                 'DCR_CTA_APOS_INDIV_SUPL_PATROC'	          ||';'||
-                                 'SLD_INI_CTA_APO_INDI_SUPLPATRO'	          ||';'||
-                                 'VLR_TOT_CTB_APO_INDI_SUPLPATRO'	          ||';'||
-                                 'REN_TOT_CTB_APO_INDI_SUPLPATRO'	          ||';'||
-                                 'SLD_FIM_CTA_APO_INDI_SUPLPATRO'	          ||';'||
-                                 'DCR_PORT_TOTAL'					                  ||';'||
-                                 'SLD_INIC_CTA_PORT_TOT'			              ||';'||
-                                 'VLR_TOT_CTB_PORT_TOT'				              ||';'||
-                                 'RENT_TOT_CTB_PORT_TOT'			              ||';'||
-                                 'SLD_FIM_CTA_PORT_TOT'				              ||';'||
-                                 'DCR_PORT_ABERTA'					                ||';'||
-                                 'SLD_INIC_CTA_PORT_ABERTA'			            ||';'||
-                                 'VLR_TOT_CTB_PORT_ABERTA'			            ||';'||
-                                 'RENT_TOT_CTB_PORT_ABERTA'			            ||';'||
-                                 'SLD_FIM_CTA_PORT_ABERTA'			            ||';'||
-                                 'DCR_PORT_FECHADA'					                ||';'||
-                                 'SLD_INIC_CTA_PORT_FECHADA'		            ||';'||
-                                 'VLR_TOT_CTB_PORT_FECHADA'			            ||';'||
-                                 'RENT_TOT_CTB_PORT_FECHADA'		            ||';'||
-                                 'SLD_FIM_CTA_PORT_FECHADA'			            ||';'||
-                                 'DCR_PORT_JOIA_ABERTA'				              ||';'||
-                                 'SLD_INIC_CTA_PORT_JOIA_ABERTA'	          ||';'||
-                                 'VLR_TOT_CTB_PORT_JOIA_ABERTA'		          ||';'||
-                                 'RENT_TOT_CTB_PORT_JOIA_ABERTA'	          ||';'||
-                                 'SLD_FIM_CTA_PORT_JOIA_ABERTA'		          ||';'||
-                                 'DCR_PORT_JOIA_FECHADA'			              ||';'||
-                                 'SLD_INIC_CTA_PORT_JOIA_FECHADA'	          ||';'||
-                                 'VLR_TOT_CTB_PORT_JOIA_FECHADA'	          ||';'||
-                                 'RENT_TOT_CTB_PORT_JOIA_FECHADA'	          ||';'||
-                                 'SLD_FIM_CTA_PORT_JOIA_FECHADA'	          ||';'||
-                                 'DCR_DISTR_FUND_PREV_PARTIC'		            ||';'||
-                                 'SLD_INI_DIST_FUND_PREV_PARTI'		          ||';'||
-                                 'VLR_TOT_DIST_FUND_PREV_PARTI'		          ||';'||
-                                 'REN_TOT_DIST_FUND_PREV_PARTI'		          ||';'||
-                                 'SLDFIM_CTA_DISTFUNDPREVPARTI'		          ||';'||
-                                 'DCR_DISTR_FUND_PREV_PATROC'		            ||';'||
-                                 'SLD_INI_DIST_FUND_PREV_PATRO'		          ||';'||
-                                 'VLR_TOT_DIST_FUND_PREV_PATRO'		          ||';'||
-                                 'REN_TOT_DIST_FUND_PREV_PATRO'		          ||';'||
-                                 'SLDFIM_CTA_DISTFUNDPREVPATRO'		          ||';'||
-                                 'DCR_PORT_FINAL'					                  ||';'||
-                                 'SLD_INIC_CTA_PORT_FIM'			              ||';'||
-                                 'VLR_TOT_CTB_PORT_FIM'				              ||';'||
-                                 'RENT_TOT_CTB_PORT_FIM'			              ||';'||
-                                 'SLD_FIM_CTA_PORT_FIM'				              ||';'||
-                                 'DCR_SLD_PROJETADO'				                ||';'||
-                                 'VLR_SLD_PROJETADO'				                ||';'||
-                                 'VLR_SLD_ADICIONAL'				                ||';'||
-                                 'VLR_BENEF_ADICIONAL'				              ||';'||
-                                 'DTA_ULT_ATUAL'					                  ||';'||
-                                 'VLR_CONTRIB_RISCO'				                ||';'||
-                                 'VLR_CONTRIB_PATRC'				                ||';'||
-                                 'VLR_CAPIT_SEGURADO'				                ||';'||
-                                 'VLR_CONTRIB_ADM'					                ||';'||
-                                 'VLR_CONTRIB_ADM_PATRC'			              ||';'||
-                                 'VLR_SIMUL_BENEF_PORCETAGEM'		            ||';'||
-                                 'DTA_ELEGIB_BENEF_PORCETAGEM'		          ||';'||
-                                 'IDADE_ELEGIB_PORCETAGEM'			            ||';'||
-                                 'DTA_EXAURIM_BENEF_PORCETAGEM'		          ||';'||
-                                 'VLR_SIMUL_BENEF_PRAZO'			              ||';'||
-                                 'DTA_ELEGIB_BENEF_PRAZO'			              ||';'||
-                                 'IDADE_ELEGIB_BENEF_PRAZO'			            ||';'||
-                                 'DTA_EXAURIM_BENEF_PRAZO'                  
+
+        G_ARQ := UTL_FILE.FOPEN(G_DIR, P_NAME_ARQ, G_WRITING, G_SIZE);
+        UTL_FILE.PUT_LINE(G_ARQ, 'TPO_DADO'                                  ||';'||
+                                 'COD_EMPRS'                                ||';'||
+                                 'NUM_RGTRO_EMPRG'                          ||';'||
+                                 'NOM_EMPRG'                                ||';'||
+                                 'DTA_EMISS'                                ||';'||
+                                 'NUM_FOLHA'                                ||';'||
+                                 'DCR_PLANO'                                ||';'||
+                                 'PER_INIC_EXTR'                            ||';'||
+                                 'PER_FIM_EXTR'                              ||';'||
+                                 'DTA_INIC_EXTR'                            ||';'||
+                                 'DTA_FIM_EXTR'                              ||';'||
+                                 'DCR_SLD_MOV_SALDADO'                      ||';'||
+                                 'SLD_PL_SALDADO_MOV_INIC'                  ||';'||
+                                 'CTB_PL_SALDADO_MOV'                        ||';'||
+                                 'RENT_PL_SALDADO_MOV'                      ||';'||
+                                 'SLD_PL_SALDADO_MOV_FIM'                    ||';'||
+                                 'DCR_SLD_MOV_BD'                            ||';'||
+                                 'SLD_PL_BD_INIC'                            ||';'||
+                                 'CTB_PL_MOV_BD'                            ||';'||
+                                 'RENT_PL_MOV_BD'                            ||';'||
+                                 'SLD_PL_BD_MOV_FIM'                        ||';'||
+                                 'DCR_SLD_MOV_CV'                            ||';'||
+                                 'SLD_PL_CV_MOV_INIC'                        ||';'||
+                                 'CTB_PL_MOV_CV'                            ||';'||
+                                 'RENT_PL_MOV_CV'                            ||';'||
+                                 'SLD_PL_CV_MOV_FIM'                        ||';'||
+                                 'DCR_CTA_OBRIG_PARTIC'                      ||';'||
+                                 'SLD_CTA_OBRIG_PARTIC'                      ||';'||
+                                 'CTB_CTA_OBRIG_PARTIC'                      ||';'||
+                                 'RENT_CTA_OBRIG_PARTIC'                    ||';'||
+                                 'SLD_CTA_OBRIG_PARTIC_FIM'                  ||';'||
+                                 'DCR_CTA_NORM_PATROC'                      ||';'||
+                                 'SLD_CTA_NORM_PATROC'                      ||';'||
+                                 'CTB_CTA_NORM_PATROC'                      ||';'||
+                                 'RENT_NORM_PATROC'                          ||';'||
+                                 'SLD_NORM_PATROC_INIC'                      ||';'||
+                                 'DCR_CTA_ESPEC_PARTIC'                      ||';'||
+                                 'SLD_CTA_ESPEC_PARTIC'                      ||';'||
+                                 'CTB_CTA_ESPEC_PARTIC'                      ||';'||
+                                 'RENT_CTA_ESPEC_PARTIC'                    ||';'||
+                                 'SLD_CTA_ESPEC_PARTIC_INIC'                ||';'||
+                                 'DCR_CTA_ESPEC_PATROC'                      ||';'||
+                                 'SLD_CTA_ESPEC_PATROC'                      ||';'||
+                                 'CTB_CTA_ESPEC_PATROC'                      ||';'||
+                                 'RENT_CTA_ESPEC_PATROC'                    ||';'||
+                                 'SLD_CTA_ESPEC_PATROC_INIC'                ||';'||
+                                 'SLD_TOT_INIC'                              ||';'||
+                                 'CTB_TOT_INIC'                              ||';'||
+                                 'RENT_PERIODO'                              ||';'||
+                                 'SLD_TOT_FIM'                              ||';'||
+                                 'PRM_MES_PERIODO_CTB'                      ||';'||
+                                 'SEG_MES_PERIODO_CTB'                      ||';'||
+                                 'TER_MES_PERIODO_CTB'                      ||';'||
+                                 'DCR_TOT_CTB_BD'                            ||';'||
+                                 'VLR_TOT_CTB_BD_PRM_MES'                    ||';'||
+                                 'VLR_TOT_CTB_BD_SEG_MES'                    ||';'||
+                                 'VLR_TOT_CTB_BD_TER_MES'                    ||';'||
+                                 'VLR_TOT_CTB_BD_PERIODO'                    ||';'||
+                                 'DCR_TOT_CTB_CV'                            ||';'||
+                                 'VLR_TOT_CTB_CV_PRM_MES'                    ||';'||
+                                 'VLR_TOT_CTB_CV_SEG_MES'                    ||';'||
+                                 'VLR_TOT_CTB_CV_TER_MES'                    ||';'||
+                                 'VLR_TOT_CTB_CV_PERIODO'                    ||';'||
+                                 'DCR_TPO_CTB_VOL_PARTIC'                    ||';'||
+                                 'VLR_CTB_VOL_PARTIC_PRM_MES'                ||';'||
+                                 'VLR_CTB_VOL_PARTIC_SEG_MES'                ||';'||
+                                 'VLR_CTB_VOL_PARTIC_TER_MES'                ||';'||
+                                 'VLR_CTB_VOL_PARTIC_PERIODO'                ||';'||
+                                 'DCR_TPO_CTB_VOL_PATROC'                    ||';'||
+                                 'VLR_CTB_VOL_PATROC_PRM_MES'                ||';'||
+                                 'VLR_CTB_VOL_PATROC_SEG_MES'                ||';'||
+                                 'VLR_CTB_VOL_PATROC_TER_MES'                ||';'||
+                                 'VLR_CTB_VOL_PATROC_PERIODO'                ||';'||
+                                 'DCR_TPO_CTB_OBRIG_PARTIC'                  ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_PRM_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_SEG_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_TER_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PARTIC_PERIODO'              ||';'||
+                                 'DCR_TPO_CTB_OBRIG_PATROC'                  ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_PRM_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_SEG_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_TER_MES'              ||';'||
+                                 'VLR_CTB_OBRIG_PATROC_PERIODO'              ||';'||
+                                 'DCR_TPO_CTB_ESPOR_PATROC'                  ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_PRM_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_SEG_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_TER_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PATROC_PERIODO'              ||';'||
+                                 'DCR_TPO_CTB_ESPOR_PARTIC'                  ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_PRM_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_SEG_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_TER_MES'              ||';'||
+                                 'VLR_CTB_ESPOR_PARTIC_PERIODO'              ||';'||
+                                 'TOT_CTB_PRM_MES'                          ||';'||
+                                 'TOT_CTB_SEG_MES'                          ||';'||
+                                 'TOT_CTB_TER_MES'                          ||';'||
+                                 'TOT_CTB_EXTRATO'                          ||';'||
+                                 'PRM_MES_PERIODO_RENT'                      ||';'||
+                                 'SEG_MES_PERIODO_RENT'                      ||';'||
+                                 'TER_MES_PERIODO_RENT'                      ||';'||
+                                 'PCT_RENT_REAL_PRM_MES'                    ||';'||
+                                 'PCT_RENT_REAL_SEG_MES'                    ||';'||
+                                 'PCT_RENT_REAL_TER_MES'                    ||';'||
+                                 'PCT_RENT_REAL_TOT_MES'                    ||';'||
+                                 'PCT_RENT_LMTD_PRM_MES'                    ||';'||
+                                 'PCT_RENT_LMTD_SEG_MES'                    ||';'||
+                                 'PCT_RENT_LMTD_TER_MES'                    ||';'||
+                                 'PCT_RENT_LMTD_TOT_MES'                    ||';'||
+                                 'PCT_RENT_IGPDI_PRM_MES'                    ||';'||
+                                 'PCT_RENT_IGPDI_SEG_MES'                    ||';'||
+                                 'PCT_RENT_IGPDI_TER_MES'                    ||';'||
+                                 'PCT_RENT_IGPDI_TOT_MES'                    ||';'||
+                                 'PCT_RENT_URR_PRM_MES'                      ||';'||
+                                 'PCT_RENT_URR_SEG_MES'                      ||';'||
+                                 'PCT_RENT_URR_TER_MES'                      ||';'||
+                                 'PCT_RENT_URR_TOT_MES'                      ||';'||
+                                 'DTA_APOS_PROP'                            ||';'||
+                                 'DTA_APOS_INTE'                            ||';'||
+                                 'VLR_BENEF_PSAP_PROP'                      ||';'||
+                                 'VLR_BENEF_PSAP_INTE'                      ||';'||
+                                 'VLR_BENEF_BD_PROP'                        ||';'||
+                                 'VLR_BENEF_BD_INTE'                        ||';'||
+                                 'VLR_BENEF_CV_PROP'                        ||';'||
+                                 'VLR_BENEF_CV_INTE'                        ||';'||
+                                 'RENDA_ESTIM_PROP'                          ||';'||
+                                 'RENDA_ESTIM_INT'                          ||';'||
+                                 'VLR_RESERV_SALD_LQDA'                      ||';'||
+                                 'TXT_PRM_MENS'                              ||';'||
+                                 'TXT_SEG_MENS'                              ||';'||
+                                 'TXT_TER_MENS'                              ||';'||
+                                 'TXT_QUA_MENS'                              ||';'||
+                                 'IDADE_PROP_BSPS'                          ||';'||
+                                 'VLR_CTB_PROP_BSPS'                        ||';'||
+                                 'IDADE_INT_BSPS'                            ||';'||
+                                 'VLR_CTB_INT_BSPS'                          ||';'||
+                                 'IDADE_PROP_BD'                            ||';'||
+                                 'VLR_CTB_PROP_BD'                          ||';'||
+                                 'IDADE_INT_BD'                              ||';'||
+                                 'VLR_CTB_INT_BD'                            ||';'||
+                                 'IDADE_PROP_CV'                            ||';'||
+                                 'VLR_CTB_PROP_CV'                          ||';'||
+                                 'IDADE_INT_CV'                              ||';'||
+                                 'VLR_CTB_INT_CV'                            ||';'||
+                                 'DCR_COTA_INDEX_PLAN_1'                    ||';'||
+                                 'DCR_COTA_INDEX_PLAN_2'                    ||';'||
+                                 'DCR_CTA_APOS_INDIV_VOL_PARTIC'            ||';'||
+                                 'SLD_INI_CTA_APO_INDI_VOL_PARTI'            ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_VOL_PARTI'            ||';'||
+                                 'REN_TOT_CTB_APO_INDI_VOL_PARTI'            ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_VOL_PARTI'            ||';'||
+                                 'DCR_CTA_APOS_INDIV_ESPO_PARTIC'            ||';'||
+                                 'SLD_INI_CTA_APO_INDI_ESPOPARTI'            ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_ESPOPARTI'            ||';'||
+                                 'REN_TOT_CTB_APO_INDI_ESPOPARTI'            ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_ESPOPARTI'            ||';'||
+                                 'DCR_CTA_APOS_INDIV_VOL_PATROC'            ||';'||
+                                 'SLD_INI_CTA_APO_INDI_VOL_PATRO'            ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_VOL_PATRO'            ||';'||
+                                 'REN_TOT_CTB_APO_INDI_VOL_PATRO'            ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_VOL_PATRO'            ||';'||
+                                 'DCR_CTA_APOS_INDIV_SUPL_PATROC'            ||';'||
+                                 'SLD_INI_CTA_APO_INDI_SUPLPATRO'            ||';'||
+                                 'VLR_TOT_CTB_APO_INDI_SUPLPATRO'            ||';'||
+                                 'REN_TOT_CTB_APO_INDI_SUPLPATRO'            ||';'||
+                                 'SLD_FIM_CTA_APO_INDI_SUPLPATRO'            ||';'||
+                                 'DCR_PORT_TOTAL'                            ||';'||
+                                 'SLD_INIC_CTA_PORT_TOT'                    ||';'||
+                                 'VLR_TOT_CTB_PORT_TOT'                      ||';'||
+                                 'RENT_TOT_CTB_PORT_TOT'                    ||';'||
+                                 'SLD_FIM_CTA_PORT_TOT'                      ||';'||
+                                 'DCR_PORT_ABERTA'                          ||';'||
+                                 'SLD_INIC_CTA_PORT_ABERTA'                  ||';'||
+                                 'VLR_TOT_CTB_PORT_ABERTA'                  ||';'||
+                                 'RENT_TOT_CTB_PORT_ABERTA'                  ||';'||
+                                 'SLD_FIM_CTA_PORT_ABERTA'                  ||';'||
+                                 'DCR_PORT_FECHADA'                          ||';'||
+                                 'SLD_INIC_CTA_PORT_FECHADA'                ||';'||
+                                 'VLR_TOT_CTB_PORT_FECHADA'                  ||';'||
+                                 'RENT_TOT_CTB_PORT_FECHADA'                ||';'||
+                                 'SLD_FIM_CTA_PORT_FECHADA'                  ||';'||
+                                 'DCR_PORT_JOIA_ABERTA'                      ||';'||
+                                 'SLD_INIC_CTA_PORT_JOIA_ABERTA'            ||';'||
+                                 'VLR_TOT_CTB_PORT_JOIA_ABERTA'              ||';'||
+                                 'RENT_TOT_CTB_PORT_JOIA_ABERTA'            ||';'||
+                                 'SLD_FIM_CTA_PORT_JOIA_ABERTA'              ||';'||
+                                 'DCR_PORT_JOIA_FECHADA'                    ||';'||
+                                 'SLD_INIC_CTA_PORT_JOIA_FECHADA'            ||';'||
+                                 'VLR_TOT_CTB_PORT_JOIA_FECHADA'            ||';'||
+                                 'RENT_TOT_CTB_PORT_JOIA_FECHADA'            ||';'||
+                                 'SLD_FIM_CTA_PORT_JOIA_FECHADA'            ||';'||
+                                 'DCR_DISTR_FUND_PREV_PARTIC'                ||';'||
+                                 'SLD_INI_DIST_FUND_PREV_PARTI'              ||';'||
+                                 'VLR_TOT_DIST_FUND_PREV_PARTI'              ||';'||
+                                 'REN_TOT_DIST_FUND_PREV_PARTI'              ||';'||
+                                 'SLDFIM_CTA_DISTFUNDPREVPARTI'              ||';'||
+                                 'DCR_DISTR_FUND_PREV_PATROC'                ||';'||
+                                 'SLD_INI_DIST_FUND_PREV_PATRO'              ||';'||
+                                 'VLR_TOT_DIST_FUND_PREV_PATRO'              ||';'||
+                                 'REN_TOT_DIST_FUND_PREV_PATRO'              ||';'||
+                                 'SLDFIM_CTA_DISTFUNDPREVPATRO'              ||';'||
+                                 'DCR_PORT_FINAL'                            ||';'||
+                                 'SLD_INIC_CTA_PORT_FIM'                    ||';'||
+                                 'VLR_TOT_CTB_PORT_FIM'                      ||';'||
+                                 'RENT_TOT_CTB_PORT_FIM'                    ||';'||
+                                 'SLD_FIM_CTA_PORT_FIM'                      ||';'||
+                                 'DCR_SLD_PROJETADO'                        ||';'||
+                                 'VLR_SLD_PROJETADO'                        ||';'||
+                                 'VLR_SLD_ADICIONAL'                        ||';'||
+                                 'VLR_BENEF_ADICIONAL'                      ||';'||
+                                 'DTA_ULT_ATUAL'                            ||';'||
+                                 'VLR_CONTRIB_RISCO'                        ||';'||
+                                 'VLR_CONTRIB_PATRC'                        ||';'||
+                                 'VLR_CAPIT_SEGURADO'                        ||';'||
+                                 'VLR_CONTRIB_ADM'                          ||';'||
+                                 'VLR_CONTRIB_ADM_PATRC'                    ||';'||
+                                 'VLR_SIMUL_BENEF_PORCETAGEM'                ||';'||
+                                 'DTA_ELEGIB_BENEF_PORCETAGEM'              ||';'||
+                                 'IDADE_ELEGIB_PORCETAGEM'                  ||';'||
+                                 'DTA_EXAURIM_BENEF_PORCETAGEM'              ||';'||
+                                 'VLR_SIMUL_BENEF_PRAZO'                    ||';'||
+                                 'DTA_ELEGIB_BENEF_PRAZO'                    ||';'||
+                                 'IDADE_ELEGIB_BENEF_PRAZO'                  ||';'||
+                                 'DTA_EXAURIM_BENEF_PRAZO'
                   );
-        
+
         FOR REG_GERA_CSV IN CUR_GERA_ARQ_CSV LOOP
-                       
-         UTL_FILE.PUT_LINE(G_ARQ, REG_GERA_CSV.TPO_DADO					                        || ';' ||
+
+         UTL_FILE.PUT_LINE(G_ARQ, REG_GERA_CSV.TPO_DADO                                  || ';' ||
                                   REG_GERA_CSV.COD_EMPRS                                || ';' ||
                                   REG_GERA_CSV.NUM_RGTRO_EMPRG                          || ';' ||
                                   REG_GERA_CSV.NOM_EMPRG                                || ';' ||
@@ -1311,24 +1270,24 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                   REG_GERA_CSV.IDADE_ELEGIB_BENEF_PRAZO                 || ';' ||
                                   REG_GERA_CSV.DTA_EXAURIM_BENEF_PRAZO                  || ';'
                            );
-        
-        END LOOP;          
 
-      UTL_FILE.FCLOSE(G_ARQ); 
+        END LOOP;
+
+      UTL_FILE.FCLOSE(G_ARQ);
       DBMS_OUTPUT.PUT_LINE('Arquivo csv gerado com sucesso!');
       EXCEPTION
         WHEN UTL_FILE.INVALID_PATH THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Diretório Inválido');
+            DBMS_OUTPUT.PUT_LINE('DiretÃƒÂ³rio InvÃƒÂ¡lido');
         WHEN UTL_FILE.INVALID_OPERATION THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Operação invalida no arquivo'); 
+            DBMS_OUTPUT.PUT_LINE('OperaÃƒÂ§ÃƒÂ£o invalida no arquivo');
         WHEN UTL_FILE.WRITE_ERROR THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Erro de gravação no arquivo'); 
+            DBMS_OUTPUT.PUT_LINE('Erro de gravaÃƒÂ§ÃƒÂ£o no arquivo');
         WHEN UTL_FILE.INVALID_MODE THEN
             UTL_FILE.FCLOSE(G_ARQ);
-            DBMS_OUTPUT.PUT_LINE('Modo de acesso inválido');
+            DBMS_OUTPUT.PUT_LINE('Modo de acesso invÃƒÂ¡lido');
         WHEN No_data_found THEN
             UTL_FILE.FCLOSE(G_ARQ);
             DBMS_OUTPUT.PUT_LINE('Arquivo: '||P_NAME_ARQ);
@@ -1336,326 +1295,326 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             UTL_FILE.FCLOSE(G_ARQ);
             DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
             DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-    
-   
+
+
     END PRC_GERA_ARQ_CSV;
-  
-   
+
+
     FUNCTION FN_TRATA_ARQUIVO
       RETURN BOOLEAN
-                
+
     IS
       L_TAB_STAGE VARCHAR2(100):= 'TRUNCATE TABLE'||' '|| 'OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO';
       V_COUNT NUMBER           :=0;
       R_VALIDA BOOLEAN;
-      
+
       CURSOR C_TRATA_DADOS IS
-               SELECT DECODE(TO_NUMBER(TPO_DADO),1,2)                                                                     AS TPO_DADO       
-                  ,TO_NUMBER(COD_EMPRS)                                                                                   AS COD_EMPRS         
-                  ,NUM_RGTRO_EMPRG                                                                                        AS NUM_RGTRO_EMPRG  
-                  ,NOM_EMPRG                                                                                              AS NOM_EMPRG                                   
+               SELECT DECODE(TO_NUMBER(TPO_DADO),1,2)                                                                     AS TPO_DADO
+                  ,TO_NUMBER(COD_EMPRS)                                                                                   AS COD_EMPRS
+                  ,NUM_RGTRO_EMPRG                                                                                        AS NUM_RGTRO_EMPRG
+                  ,NOM_EMPRG                                                                                              AS NOM_EMPRG
                   ,CASE
                       WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JAN' THEN
-                           TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')                                             
-                                                   
+                           TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+
                       WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                           
-                      WHEN SUBSTR(DTA_EMISS, 4,2) = '01'  THEN                                                
-                           DTA_EMISS     
-                       
+
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '01'  THEN
+                           DTA_EMISS
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'FEV','FEB'),4,3) = 'FEB' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD/MM/RRRR')                                                     
-                           
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD/MM/RRRR')
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'FEV', 'FEB')),'DD/MM/RRRR')
-                      
-                      WHEN SUBSTR(DTA_EMISS, 4,2) = '02'  THEN                                                
-                           DTA_EMISS                           
-                       
+
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '02'  THEN
+                           DTA_EMISS
+
                       WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                           
+
                       WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                      
-                      WHEN SUBSTR(DTA_EMISS, 4,2) = '03'  THEN                                                
-                           DTA_EMISS     
-                       
+
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '03'  THEN
+                           DTA_EMISS
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'ABR','APR'),4,3) = 'APR' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD/MM/RRRR')
-                           
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'ABR','APR'),3,3) = 'APR' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD/MM/RRRR') 
-                      
-                      WHEN SUBSTR(DTA_EMISS, 4,2) = '04'  THEN                                                
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'ABR', 'APR')),'DD/MM/RRRR')
+
+                      WHEN SUBSTR(DTA_EMISS, 4,2) = '04'  THEN
                            DTA_EMISS
-                        
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'MAI', 'MAY')),'DD/MM/RRRR')
-                            
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'MAI','MAY'),3,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'MAI', 'MAY')),'DD/MM/RRRR')
-                            
-                       WHEN SUBSTR(DTA_EMISS, 4,2) = '05'  THEN                                                
-                           DTA_EMISS     
-                       
+
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '05'  THEN
+                           DTA_EMISS
+
                        WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUN' THEN
-                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR') 
-                            
+                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+
                        WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JUN' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                       
-                       WHEN SUBSTR(DTA_EMISS, 4,2) = '06'  THEN                                                
+
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '06'  THEN
                            DTA_EMISS
-                       
+
                        WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                        
+
                        WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                       
-                       WHEN SUBSTR(DTA_EMISS, 4,2) = '07'  THEN                                                
+
+                       WHEN SUBSTR(DTA_EMISS, 4,2) = '07'  THEN
                            DTA_EMISS
-                        
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'AGO','AUG'),4,3) = 'AUG' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'AGO','AUG'),3,3) = 'AUG' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'AGO', 'AUG')),'DD/MM/RRRR')
-                             
-                        WHEN SUBSTR(DTA_EMISS, 4,2) = '08'  THEN                                                
-                           DTA_EMISS   
-                        
+
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '08'  THEN
+                           DTA_EMISS
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'SET','SEP'),4,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'SET', 'SEP')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'SET','SEP'),3,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'SET', 'SEP')),'DD/MM/RRRR')
-                        
-                        WHEN SUBSTR(DTA_EMISS, 4,2) = '09'  THEN                                                
+
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '09'  THEN
                            DTA_EMISS
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'OUT','OCT'),4,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'OUT', 'OCT')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'OUT','OCT'),3,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'OUT', 'OCT')),'DD/MM/RRRR')
-                             
-                        WHEN SUBSTR(DTA_EMISS, 4,2) = '10'  THEN                                                
+
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '10'  THEN
                            DTA_EMISS
-                        
+
                         WHEN UPPER(SUBSTR(DTA_EMISS,4,3)) = 'NOV' THEN
-                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')  
-                            
+                            TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
+
                         WHEN UPPER(SUBSTR(DTA_EMISS,3,3)) = 'NOV' THEN
                             TO_CHAR(TO_DATE(DTA_EMISS),'DD/MM/RRRR')
-                            
-                        WHEN SUBSTR(DTA_EMISS, 4,2) = '11'  THEN                                                
-                           DTA_EMISS 
-                            
+
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '11'  THEN
+                           DTA_EMISS
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'DEZ','DEC'),4,3) = 'DEC' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'DEZ', 'DEC')),'DD/MM/RRRR')
-                        
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_EMISS),'DEZ','DEC'),3,3) = 'DEC' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_EMISS),'DEZ', 'DEC')),'DD/MM/RRRR')
-                            
-                        WHEN SUBSTR(DTA_EMISS, 4,2) = '12'  THEN                                                
+
+                        WHEN SUBSTR(DTA_EMISS, 4,2) = '12'  THEN
                            DTA_EMISS
-                            
-                   END                                                                                                    AS DTA_EMISS                  
-                  ,NUM_FOLHA                                                                                              AS NUM_FOLHA                                                                          
+
+                   END                                                                                                    AS DTA_EMISS
+                  ,NUM_FOLHA                                                                                              AS NUM_FOLHA
                   ,DCR_PLANO                                                                                              AS DCR_PLANO
                   ,PER_INIC_EXTR                                                                                          AS PER_INIC_EXTR
-                  ,PER_FIM_EXTR                                                                                           AS PER_FIM_EXTR                  
+                  ,PER_FIM_EXTR                                                                                           AS PER_FIM_EXTR
                   ,CASE
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                           
+
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                       
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'FEV','FEB'),4,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
-                           
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
-                       
+
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                           
+
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                       
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'ABR','APR'),4,3) = 'APR' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
-                           
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR')
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'ABR','APR'),3,3) = 'APR' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
-                        
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'ABR', 'APR')),'DD/MM/RRRR')
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
-                            
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'MAI','MAY'),3,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
-                       
+
                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JUN' THEN
-                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR') 
-                            
+                            TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
+
                       WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JUN' THEN
                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                       
+
                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                            
+
                        WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                        
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'AGO','AUG'),4,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')   
-                        
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'AGO','AUG'),3,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')   
-                        
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'SET','SEP'),4,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'SET','SEP'),3,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'OUT','OCT'),4,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'OUT','OCT'),3,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
-                        
+
                         WHEN UPPER(SUBSTR(DTA_INIC_EXTR,4,3)) = 'NOV' THEN
-                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')  
-                             
+                             TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
+
                         WHEN UPPER(SUBSTR(DTA_INIC_EXTR,3,3)) = 'NOV' THEN
                              TO_CHAR(TO_DATE(DTA_INIC_EXTR),'DD/MM/RRRR')
-                            
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ','DEC'),4,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
-                             
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ','DEC'),3,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_INIC_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
-                            
-                    END                                                                                                   AS DTA_INIC_EXTR                   
+
+                    END                                                                                                   AS DTA_INIC_EXTR
                     --
-                    --                   
+                    --
                     ,CASE
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                      
+
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JAN' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                       
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'FEV','FEB'),4,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
-                           
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'FEV','FEB'),3,3) = 'FEB' THEN
                            TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'FEV', 'FEB')),'DD/MM/RRRR')
-                       
+
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                           
+
                       WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'MAR' THEN
                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                       
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'ABR','APR'),4,3) = 'APR' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
-                           
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR')
+
                       WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'ABR','APR'),3,3) = 'APR' THEN
-                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR') 
-                        
+                           TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'ABR', 'APR')),'DD/MM/RRRR')
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'MAI','MAY'),4,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
-                            
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'MAI','MAY'),3,3) = 'MAY' THEN
                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'MAI', 'MAY')),'DD/MM/RRRR')
-                       
+
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JUN' THEN
-                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR') 
-                            
+                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JUN' THEN
-                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR') 
-                       
+                            TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                            
-                            
+
+
                        WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'JUL' THEN
                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
-                        
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'AGO','AUG'),4,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR') 
-                             
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')
+
                        WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'AGO','AUG'),3,3) = 'AUG' THEN
-                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')     
-                        
+                             TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'AGO', 'AUG')),'DD/MM/RRRR')
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'SET','SEP'),4,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'SET','SEP'),3,3) = 'SEP' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'SET', 'SEP')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'OUT','OCT'),4,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'OUT','OCT'),3,3) = 'OCT' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'OUT', 'OCT')),'DD/MM/RRRR')
-                        
+
                         WHEN UPPER(SUBSTR(DTA_FIM_EXTR,4,3)) = 'NOV' THEN
-                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')  
-                             
+                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+
                         WHEN UPPER(SUBSTR(DTA_FIM_EXTR,3,3)) = 'NOV' THEN
-                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')  
-                            
+                             TO_CHAR(TO_DATE(DTA_FIM_EXTR),'DD/MM/RRRR')
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ','DEC'),4,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
-                             
+
                         WHEN SUBSTR(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ','DEC'),3,3) = 'DEC' THEN
                              TO_CHAR(TO_DATE(REPLACE(UPPER(DTA_FIM_EXTR),'DEZ', 'DEC')),'DD/MM/RRRR')
-                                                                                                                    
-                    END                                                                                                   AS DTA_FIM_EXTR                                         
+
+                    END                                                                                                   AS DTA_FIM_EXTR
                     --
-                    -- 
-                  ,NVL(TRIM(DCR_SLD_MOV_SALDADO),' ')                                                                     AS DCR_SLD_MOV_SALDADO                                     
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_SALDADO_MOV_INIC,' ',''),'0'),'.',''),',','.'))           AS SLD_PL_SALDADO_MOV_INIC                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_PL_SALDADO_MOV,' ',''),'0'),'.',''),',','.'))                AS CTB_PL_SALDADO_MOV                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_PL_SALDADO_MOV,' ',''),'0'),'.',''),',','.'))               AS RENT_PL_SALDADO_MOV                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_SALDADO_MOV_FIM,' ',''),'0'),'.',''),',','.'))            AS SLD_PL_SALDADO_MOV_FIM                  
-                  ,TRIM(DCR_SLD_MOV_BD)                                                                                   AS DCR_SLD_MOV_BD                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_BD_INIC,' ',''),'0'),'.',''),',','.'))                    AS SLD_PL_BD_INIC                  
+                    --
+                  ,NVL(TRIM(DCR_SLD_MOV_SALDADO),' ')                                                                     AS DCR_SLD_MOV_SALDADO
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_SALDADO_MOV_INIC,' ',''),'0'),'.',''),',','.'))           AS SLD_PL_SALDADO_MOV_INIC
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_PL_SALDADO_MOV,' ',''),'0'),'.',''),',','.'))                AS CTB_PL_SALDADO_MOV
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_PL_SALDADO_MOV,' ',''),'0'),'.',''),',','.'))               AS RENT_PL_SALDADO_MOV
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_SALDADO_MOV_FIM,' ',''),'0'),'.',''),',','.'))            AS SLD_PL_SALDADO_MOV_FIM
+                  ,TRIM(DCR_SLD_MOV_BD)                                                                                   AS DCR_SLD_MOV_BD
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_BD_INIC,' ',''),'0'),'.',''),',','.'))                    AS SLD_PL_BD_INIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_PL_MOV_BD,' ',''),'0'),'.',''),',','.'))                     AS CTB_PL_MOV_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_PL_MOV_BD,' ',''),'0'),'.',''),',','.'))                    AS RENT_PL_MOV_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_BD_MOV_FIM,' ',''),'0'),'.',''),',','.'))                 AS SLD_PL_BD_MOV_FIM
-                  ,TRIM(DCR_SLD_MOV_CV)                                                                                   AS DCR_SLD_MOV_CV                 
+                  ,TRIM(DCR_SLD_MOV_CV)                                                                                   AS DCR_SLD_MOV_CV
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_CV_MOV_INIC,' ',''),'0'),'.',''),',','.'))                AS SLD_PL_CV_MOV_INIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_PL_MOV_CV,' ',''),'0'),'.',''),',','.'))                     AS CTB_PL_MOV_CV
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_PL_MOV_CV,' ',''),'0'),'.',''),',','.'))                    AS RENT_PL_MOV_CV
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_PL_CV_MOV_FIM,' ',''),'0'),'.',''),',','.'))                 AS SLD_PL_CV_MOV_FIM
-                  ,TRIM(DCR_CTA_OBRIG_PARTIC)                                                                             AS DCR_CTA_OBRIG_PARTIC                                    
+                  ,TRIM(DCR_CTA_OBRIG_PARTIC)                                                                             AS DCR_CTA_OBRIG_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_OBRIG_PARTIC,' ',''),'0'),'.',''),',','.'))              AS SLD_CTA_OBRIG_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_CTA_OBRIG_PARTIC,' ',''),'0'),'.',''),',','.'))              AS CTB_CTA_OBRIG_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_CTA_OBRIG_PARTIC,' ',''),'0'),'.',''),',','.'))             AS RENT_CTA_OBRIG_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_OBRIG_PARTIC_FIM,' ',''),'0'),'.',''),',','.'))          AS SLD_CTA_OBRIG_PARTIC_FIM
-                  ,TRIM(DCR_CTA_NORM_PATROC)                                                                              AS DCR_CTA_NORM_PATROC                                                      
+                  ,TRIM(DCR_CTA_NORM_PATROC)                                                                              AS DCR_CTA_NORM_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_NORM_PATROC,' ',''),'0'),'.',''),',','.'))               AS SLD_CTA_NORM_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_CTA_NORM_PATROC,' ',''),'0'),'.',''),',','.'))               AS CTB_CTA_NORM_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_NORM_PATROC,' ',''),'0'),'.',''),',','.'))                  AS RENT_NORM_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_NORM_PATROC_INIC,' ',''),'0'),'.',''),',','.'))              AS SLD_NORM_PATROC_INIC
-                  ,TRIM(DCR_CTA_ESPEC_PARTIC)                                                                             AS DCR_CTA_ESPEC_PARTIC                  
+                  ,TRIM(DCR_CTA_ESPEC_PARTIC)                                                                             AS DCR_CTA_ESPEC_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_ESPEC_PARTIC,' ',''),'0'),'.',''),',','.'))              AS SLD_CTA_ESPEC_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_CTA_ESPEC_PARTIC,' ',''),'0'),'.',''),',','.'))              AS CTB_CTA_ESPEC_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_CTA_ESPEC_PARTIC,' ',''),'0'),'.',''),',','.'))             AS RENT_CTA_ESPEC_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_ESPEC_PARTIC_INIC,' ',''),'0'),'.',''),',','.'))         AS SLD_CTA_ESPEC_PARTIC_INIC
-                  ,TRIM(DCR_CTA_ESPEC_PATROC)                                                                             AS DCR_CTA_ESPEC_PATROC                  
+                  ,TRIM(DCR_CTA_ESPEC_PATROC)                                                                             AS DCR_CTA_ESPEC_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_ESPEC_PATROC,' ',''),'0'),'.',''),',','.'))              AS SLD_CTA_ESPEC_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_CTA_ESPEC_PATROC,' ',''),'0'),'.',''),',','.'))              AS CTB_CTA_ESPEC_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_CTA_ESPEC_PATROC,' ',''),'0'),'.',''),',','.'))             AS RENT_CTA_ESPEC_PATROC
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_ESPEC_PATROC_INIC,' ',''),'0'),'.',''),',','.'))         AS SLD_CTA_ESPEC_PATROC_INIC                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_CTA_ESPEC_PATROC_INIC,' ',''),'0'),'.',''),',','.'))         AS SLD_CTA_ESPEC_PATROC_INIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_TOT_INIC,' ',''),'0'),'.',''),',','.'))                      AS SLD_TOT_INIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(CTB_TOT_INIC,' ',''),'0'),'.',''),',','.'))                      AS CTB_TOT_INIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_PERIODO,' ',''),'0'),'.',''),',','.'))                      AS RENT_PERIODO
@@ -1663,32 +1622,32 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,TRIM(PRM_MES_PERIODO_CTB)                                                                              AS PRM_MES_PERIODO_CTB
                   ,TRIM(SEG_MES_PERIODO_CTB)                                                                              AS SEG_MES_PERIODO_CTB
                   ,TRIM(TER_MES_PERIODO_CTB)                                                                              AS TER_MES_PERIODO_CTB
-                  ,TRIM(DCR_TOT_CTB_BD)                                                                                   AS DCR_TOT_CTB_BD                                    
+                  ,TRIM(DCR_TOT_CTB_BD)                                                                                   AS DCR_TOT_CTB_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_BD_PRM_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_BD_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_BD_SEG_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_BD_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_BD_TER_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_BD_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_BD_PERIODO,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_BD_PERIODO
-                  ,TRIM(DCR_TOT_CTB_CV)                                                                                   AS DCR_TOT_CTB_CV                  
+                  ,TRIM(DCR_TOT_CTB_CV)                                                                                   AS DCR_TOT_CTB_CV
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_CV_PRM_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_CV_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_CV_SEG_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_CV_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_CV_TER_MES,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_CV_TER_MES
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_CV_PERIODO,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_CV_PERIODO                  
-                  ,TRIM(DCR_TPO_CTB_VOL_PARTIC)                                                                           AS DCR_TPO_CTB_VOL_PARTIC                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_CV_PERIODO,' ',''),'0'),'.',''),',','.'))            AS VLR_TOT_CTB_CV_PERIODO
+                  ,TRIM(DCR_TPO_CTB_VOL_PARTIC)                                                                           AS DCR_TPO_CTB_VOL_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PARTIC_PRM_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PARTIC_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PARTIC_SEG_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PARTIC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PARTIC_TER_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PARTIC_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PARTIC_PERIODO,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PARTIC_PERIODO
-                  ,TRIM(DCR_TPO_CTB_VOL_PATROC)                                                                           AS DCR_TPO_CTB_VOL_PATROC                  
+                  ,TRIM(DCR_TPO_CTB_VOL_PATROC)                                                                           AS DCR_TPO_CTB_VOL_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PATROC_PRM_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PATROC_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PATROC_SEG_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PATROC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PATROC_TER_MES,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PATROC_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_VOL_PATROC_PERIODO,' ',''),'0'),'.',''),',','.'))        AS VLR_CTB_VOL_PATROC_PERIODO
-                  ,TRIM(DCR_TPO_CTB_OBRIG_PARTIC)                                                                         AS DCR_TPO_CTB_OBRIG_PARTIC                  
+                  ,TRIM(DCR_TPO_CTB_OBRIG_PARTIC)                                                                         AS DCR_TPO_CTB_OBRIG_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PARTIC_PRM_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PARTIC_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PARTIC_SEG_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PARTIC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PARTIC_TER_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PARTIC_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PARTIC_PERIODO,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PARTIC_PERIODO
-                  ,TRIM(DCR_TPO_CTB_OBRIG_PATROC)                                                                         AS DCR_TPO_CTB_OBRIG_PATROC                  
+                  ,TRIM(DCR_TPO_CTB_OBRIG_PATROC)                                                                         AS DCR_TPO_CTB_OBRIG_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PATROC_PRM_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PATROC_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PATROC_SEG_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PATROC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_OBRIG_PATROC_TER_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_OBRIG_PATROC_TER_MES
@@ -1698,36 +1657,36 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PATROC_SEG_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PATROC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PATROC_TER_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PATROC_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PATROC_PERIODO,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PATROC_PERIODO
-                  ,TRIM(DCR_TPO_CTB_ESPOR_PARTIC)                                                                         AS DCR_TPO_CTB_ESPOR_PARTIC                                    
+                  ,TRIM(DCR_TPO_CTB_ESPOR_PARTIC)                                                                         AS DCR_TPO_CTB_ESPOR_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PARTIC_PRM_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PARTIC_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PARTIC_SEG_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PARTIC_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PARTIC_TER_MES,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PARTIC_TER_MES
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PARTIC_PERIODO,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PARTIC_PERIODO                                    
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_ESPOR_PARTIC_PERIODO,' ',''),'0'),'.',''),',','.'))      AS VLR_CTB_ESPOR_PARTIC_PERIODO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(TOT_CTB_PRM_MES,' ',''),'0'),'.',''),',','.'))                   AS TOT_CTB_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(TOT_CTB_SEG_MES,' ',''),'0'),'.',''),',','.'))                   AS TOT_CTB_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(TOT_CTB_TER_MES,' ',''),'0'),'.',''),',','.'))                   AS TOT_CTB_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(TOT_CTB_EXTRATO,' ',''),'0'),'.',''),',','.'))                   AS TOT_CTB_EXTRATO
                   ,TRIM(PRM_MES_PERIODO_RENT)                                                                             AS PRM_MES_PERIODO_RENT
                   ,TRIM(SEG_MES_PERIODO_RENT)                                                                             AS SEG_MES_PERIODO_RENT
-                  ,TRIM(TER_MES_PERIODO_RENT)                                                                             AS TER_MES_PERIODO_RENT                  
+                  ,TRIM(TER_MES_PERIODO_RENT)                                                                             AS TER_MES_PERIODO_RENT
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_REAL_PRM_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_REAL_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_REAL_SEG_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_REAL_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_REAL_TER_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_REAL_TER_MES
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_REAL_TOT_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_REAL_TOT_MES                                                                                                                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_REAL_TOT_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_REAL_TOT_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_LMTD_PRM_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_LMTD_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_LMTD_SEG_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_LMTD_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_LMTD_TER_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_LMTD_TER_MES
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_LMTD_TOT_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_LMTD_TOT_MES                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_LMTD_TOT_MES,' ',''),'0'),'.',''),',','.'))             AS PCT_RENT_LMTD_TOT_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_IGPDI_PRM_MES,' ',''),'0'),'.',''),',','.'))            AS PCT_RENT_IGPDI_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_IGPDI_SEG_MES,' ',''),'0'),'.',''),',','.'))            AS PCT_RENT_IGPDI_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_IGPDI_TER_MES,' ',''),'0'),'.',''),',','.'))            AS PCT_RENT_IGPDI_TER_MES
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_IGPDI_TOT_MES,' ',''),'0'),'.',''),',','.'))            AS PCT_RENT_IGPDI_TOT_MES                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_IGPDI_TOT_MES,' ',''),'0'),'.',''),',','.'))            AS PCT_RENT_IGPDI_TOT_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_URR_PRM_MES,' ',''),'0'),'.',''),',','.'))              AS PCT_RENT_URR_PRM_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_URR_SEG_MES,' ',''),'0'),'.',''),',','.'))              AS PCT_RENT_URR_SEG_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_URR_TER_MES,' ',''),'0'),'.',''),',','.'))              AS PCT_RENT_URR_TER_MES
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(PCT_RENT_URR_TOT_MES,' ',''),'0'),'.',''),',','.'))              AS PCT_RENT_URR_TOT_MES
                   ,TO_DATE(DTA_APOS_PROP,'DD/MM/RRRR')                                                                    AS DTA_APOS_PROP
-                  ,TO_DATE(DTA_APOS_INTE,'DD/MM/RRRR')                                                                    AS DTA_APOS_INTE                  
+                  ,TO_DATE(DTA_APOS_INTE,'DD/MM/RRRR')                                                                    AS DTA_APOS_INTE
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_BENEF_PSAP_PROP,' ',''),'0'),'.',''),',','.'))               AS VLR_BENEF_PSAP_PROP
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_BENEF_PSAP_INTE,' ',''),'0'),'.',''),',','.'))               AS VLR_BENEF_PSAP_INTE
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_BENEF_BD_PROP,' ',''),'0'),'.',''),',','.'))                 AS VLR_BENEF_BD_PROP
@@ -1745,20 +1704,20 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_PROP_BSPS,' ',''),'0'),'.',''),',','.'))                 AS VLR_CTB_PROP_BSPS
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(IDADE_INT_BSPS,' ',''),'0'),'.',''),',','.'))                    AS IDADE_INT_BSPS
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_INT_BSPS,' ',''),'0'),'.',''),',','.'))                  AS VLR_CTB_INT_BSPS
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(IDADE_PROP_BD,' ',''),'0'),'.',''),',','.'))                     AS IDADE_PROP_BD                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(IDADE_PROP_BD,' ',''),'0'),'.',''),',','.'))                     AS IDADE_PROP_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_PROP_BD,' ',''),'0'),'.',''),',','.'))                   AS VLR_CTB_PROP_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(IDADE_INT_BD,' ',''),'0'),'.',''),',','.'))                      AS IDADE_INT_BD
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_INT_BD,' ',''),'0'),'.',''),',','.'))                    AS VLR_CTB_INT_BD
-                  ,IDADE_PROP_CV                                                                                          AS IDADE_PROP_CV                    
+                  ,IDADE_PROP_CV                                                                                          AS IDADE_PROP_CV
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_PROP_CV,' ',''),'0'),'.',''),',','.'))                   AS VLR_CTB_PROP_CV
                   ,IDADE_INT_CV                                                                                           AS IDADE_INT_CV
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_INT_CV,' ',''),'0'),'.',''),',','.'))                    AS VLR_CTB_INT_CV                                    
-                  ,TRIM(DCR_COTA_INDEX_PLAN_1)                                                                            AS DCR_COTA_INDEX_PLAN_1  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_CTB_INT_CV,' ',''),'0'),'.',''),',','.'))                    AS VLR_CTB_INT_CV
+                  ,TRIM(DCR_COTA_INDEX_PLAN_1)                                                                            AS DCR_COTA_INDEX_PLAN_1
                   ,TRIM(DCR_COTA_INDEX_PLAN_2)                                                                            AS DCR_COTA_INDEX_PLAN_2
-                  ,TRIM(DCR_CTA_APOS_INDIV_VOL_PARTIC)                                                                    AS DCR_CTA_APOS_INDIV_VOL_PARTIC                  
+                  ,TRIM(DCR_CTA_APOS_INDIV_VOL_PARTIC)                                                                    AS DCR_CTA_APOS_INDIV_VOL_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_CTA_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS SLD_INI_CTA_APO_INDI_VOL_PARTI
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS VLR_TOT_CTB_APO_INDI_VOL_PARTI                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_CTB_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS REN_TOT_CTB_APO_INDI_VOL_PARTI                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS VLR_TOT_CTB_APO_INDI_VOL_PARTI
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_CTB_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS REN_TOT_CTB_APO_INDI_VOL_PARTI
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_APO_INDI_VOL_PARTI,' ',''),'0'),'.',''),',','.'))    AS SLD_FIM_CTA_APO_INDI_VOL_PARTI
                   ,TRIM(DCR_CTA_APOS_INDIV_ESPO_PARTIC)                                                                   AS DCR_CTA_APOS_INDIV_ESPO_PARTIC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_CTA_APO_INDI_ESPOPARTI,' ',''),'0'),'.',''),',','.'))    AS SLD_INI_CTA_APO_INDI_ESPOPARTI
@@ -1769,63 +1728,63 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_CTA_APO_INDI_VOL_PATRO,' ',''),'0'),'.',''),',','.'))    AS SLD_INI_CTA_APO_INDI_VOL_PATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_APO_INDI_VOL_PATRO,' ',''),'0'),'.',''),',','.'))    AS VLR_TOT_CTB_APO_INDI_VOL_PATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_CTB_APO_INDI_VOL_PATRO,' ',''),'0'),'.',''),',','.'))    AS REN_TOT_CTB_APO_INDI_VOL_PATRO
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_APO_INDI_VOL_PATRO,' ',''),'0'),'.',''),',','.'))    AS SLD_FIM_CTA_APO_INDI_VOL_PATRO                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_APO_INDI_VOL_PATRO,' ',''),'0'),'.',''),',','.'))    AS SLD_FIM_CTA_APO_INDI_VOL_PATRO
                   ,TRIM(DCR_CTA_APOS_INDIV_SUPL_PATROC)                                                                   AS DCR_CTA_APOS_INDIV_SUPL_PATROC
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_CTA_APO_INDI_SUPLPATRO,' ',''),'0'),'.',''),',','.'))    AS SLD_INI_CTA_APO_INDI_SUPLPATRO
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_APO_INDI_SUPLPATRO,' ',''),'0'),'.',''),',','.'))    AS VLR_TOT_CTB_APO_INDI_SUPLPATRO                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_APO_INDI_SUPLPATRO,' ',''),'0'),'.',''),',','.'))    AS VLR_TOT_CTB_APO_INDI_SUPLPATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_CTB_APO_INDI_SUPLPATRO,' ',''),'0'),'.',''),',','.'))    AS REN_TOT_CTB_APO_INDI_SUPLPATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_APO_INDI_SUPLPATRO,' ',''),'0'),'.',''),',','.'))    AS SLD_FIM_CTA_APO_INDI_SUPLPATRO
                   ,TRIM(DCR_PORT_TOTAL)                                                                                   AS DCR_PORT_TOTAL
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_TOT,' ',''),'0'),'.',''),',','.'))             AS SLD_INIC_CTA_PORT_TOT                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_TOT,' ',''),'0'),'.',''),',','.'))             AS SLD_INIC_CTA_PORT_TOT
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_TOT,' ',''),'0'),'.',''),',','.'))              AS VLR_TOT_CTB_PORT_TOT
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_TOT,' ',''),'0'),'.',''),',','.'))             AS RENT_TOT_CTB_PORT_TOT
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_TOT,' ',''),'0'),'.',''),',','.'))              AS SLD_FIM_CTA_PORT_TOT
                   ,TRIM(DCR_PORT_ABERTA)                                                                                  AS DCR_PORT_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_ABERTA,' ',''),'0'),'.',''),',','.'))          AS SLD_INIC_CTA_PORT_ABERTA
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_ABERTA,' ',''),'0'),'.',''),',','.'))           AS VLR_TOT_CTB_PORT_ABERTA                                
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_ABERTA,' ',''),'0'),'.',''),',','.'))           AS VLR_TOT_CTB_PORT_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_ABERTA,' ',''),'0'),'.',''),',','.'))          AS RENT_TOT_CTB_PORT_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_ABERTA,' ',''),'0'),'.',''),',','.'))           AS SLD_FIM_CTA_PORT_ABERTA
-                  ,TRIM(DCR_PORT_FECHADA)                                                                                 AS DCR_PORT_FECHADA                 
+                  ,TRIM(DCR_PORT_FECHADA)                                                                                 AS DCR_PORT_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_FECHADA,' ',''),'0'),'.',''),',','.'))         AS SLD_INIC_CTA_PORT_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_FECHADA,' ',''),'0'),'.',''),',','.'))          AS VLR_TOT_CTB_PORT_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_FECHADA,' ',''),'0'),'.',''),',','.'))         AS RENT_TOT_CTB_PORT_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_FECHADA,' ',''),'0'),'.',''),',','.'))          AS SLD_FIM_CTA_PORT_FECHADA
-                  ,TRIM(DCR_PORT_JOIA_ABERTA)                                                                             AS DCR_PORT_JOIA_ABERTA                  
+                  ,TRIM(DCR_PORT_JOIA_ABERTA)                                                                             AS DCR_PORT_JOIA_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_JOIA_ABERTA,' ',''),'0'),'.',''),',','.'))     AS SLD_INIC_CTA_PORT_JOIA_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_JOIA_ABERTA,' ',''),'0'),'.',''),',','.'))      AS VLR_TOT_CTB_PORT_JOIA_ABERTA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_JOIA_ABERTA,' ',''),'0'),'.',''),',','.'))     AS RENT_TOT_CTB_PORT_JOIA_ABERTA
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_JOIA_ABERTA,' ',''),'0'),'.',''),',','.'))      AS SLD_FIM_CTA_PORT_JOIA_ABERTA                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_JOIA_ABERTA,' ',''),'0'),'.',''),',','.'))      AS SLD_FIM_CTA_PORT_JOIA_ABERTA
                   ,TRIM(DCR_PORT_JOIA_FECHADA)                                                                            AS DCR_PORT_JOIA_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_JOIA_FECHADA,' ',''),'0'),'.',''),',','.'))    AS SLD_INIC_CTA_PORT_JOIA_FECHADA
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_JOIA_FECHADA,' ',''),'0'),'.',''),',','.'))     AS VLR_TOT_CTB_PORT_JOIA_FECHADA                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_JOIA_FECHADA,' ',''),'0'),'.',''),',','.'))     AS VLR_TOT_CTB_PORT_JOIA_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_JOIA_FECHADA,' ',''),'0'),'.',''),',','.'))    AS RENT_TOT_CTB_PORT_JOIA_FECHADA
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_JOIA_FECHADA,' ',''),'0'),'.',''),',','.'))     AS SLD_FIM_CTA_PORT_JOIA_FECHADA
                   ,TRIM(DCR_DISTR_FUND_PREV_PARTIC)                                                                       AS DCR_DISTR_FUND_PREV_PARTIC
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_DIST_FUND_PREV_PARTI,' ',''),'0'),'.',''),',','.'))      AS SLD_INI_DIST_FUND_PREV_PARTI                                    
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_DIST_FUND_PREV_PARTI,' ',''),'0'),'.',''),',','.'))      AS SLD_INI_DIST_FUND_PREV_PARTI
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_DIST_FUND_PREV_PARTI,' ',''),'0'),'.',''),',','.'))      AS VLR_TOT_DIST_FUND_PREV_PARTI
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_DIST_FUND_PREV_PARTI,' ',''),'0'),'.',''),',','.'))      AS REN_TOT_DIST_FUND_PREV_PARTI
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLDFIM_CTA_DISTFUNDPREVPARTI,' ',''),'0'),'.',''),',','.'))      AS SLDFIM_CTA_DISTFUNDPREVPARTI
                   ,TRIM(DCR_DISTR_FUND_PREV_PATROC)                                                                       AS DCR_DISTR_FUND_PREV_PATROC
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_DIST_FUND_PREV_PATRO,' ',''),'0'),'.',''),',','.'))      AS SLD_INI_DIST_FUND_PREV_PATRO                  
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INI_DIST_FUND_PREV_PATRO,' ',''),'0'),'.',''),',','.'))      AS SLD_INI_DIST_FUND_PREV_PATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_DIST_FUND_PREV_PATRO,' ',''),'0'),'.',''),',','.'))      AS VLR_TOT_DIST_FUND_PREV_PATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(REN_TOT_DIST_FUND_PREV_PATRO,' ',''),'0'),'.',''),',','.'))      AS REN_TOT_DIST_FUND_PREV_PATRO
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLDFIM_CTA_DISTFUNDPREVPATRO,' ',''),'0'),'.',''),',','.'))      AS SLDFIM_CTA_DISTFUNDPREVPATRO
-                  ,TRIM(DCR_PORT_FINAL)                                                                                   AS DCR_PORT_FINAL                  
-                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_FIM,' ',''),'0'),'.',''),',','.'))             AS SLD_INIC_CTA_PORT_FIM                  
+                  ,TRIM(DCR_PORT_FINAL)                                                                                   AS DCR_PORT_FINAL
+                  ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_INIC_CTA_PORT_FIM,' ',''),'0'),'.',''),',','.'))             AS SLD_INIC_CTA_PORT_FIM
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(VLR_TOT_CTB_PORT_FIM,' ',''),'0'),'.',''),',','.'))              AS VLR_TOT_CTB_PORT_FIM
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(RENT_TOT_CTB_PORT_FIM,' ',''),'0'),'.',''),',','.'))             AS RENT_TOT_CTB_PORT_FIM
                   ,TO_NUMBER(REPLACE(REPLACE(NVL(REPLACE(SLD_FIM_CTA_PORT_FIM,' ',''),'0'),'.',''),',','.'))              AS SLD_FIM_CTA_PORT_FIM
-                  ,TRIM(DCR_SLD_PROJETADO)                                                                                AS DCR_SLD_PROJETADO                  
+                  ,TRIM(DCR_SLD_PROJETADO)                                                                                AS DCR_SLD_PROJETADO
                   ,TO_NUMBER(REPLACE(REPLACE(REPLACE(VLR_SLD_PROJETADO, '.',''), CHR(13), ''), ',','.'))                  AS VLR_SLD_PROJETADO
 
 
 ---     ###       ATUALMENTE O CORPORATIVO NAO GERA DADOS PARA OS BENEFICIOS ADICIONAIS.
----               OS DADOS PARA ESSES CAMPOS SAO GERADOS NO ROTINA DO EXTRATO PREVIDENCIARIO 
+---               OS DADOS PARA ESSES CAMPOS SAO GERADOS NO ROTINA DO EXTRATO PREVIDENCIARIO
                   --,VLR_SLD_ADICIONAL                                                                      AS VLR_SLD_ADICIONAL
-                  --,NVL(REPLACE(REPLACE(VLR_BENEF_ADICIONAL,'.',''),',','.'),' ')                          AS VLR_BENEF_ADICIONAL                                                       
-                  
+                  --,NVL(REPLACE(REPLACE(VLR_BENEF_ADICIONAL,'.',''),',','.'),' ')                          AS VLR_BENEF_ADICIONAL
+
 ---     ###        AGUARDANDO DEFINICAO DA CNPC32, NAO EXISTEM DADOS ATUALMENTE NO COPORATIVO P/ OS ATRIBUTOS ABAIXO:
-                                    
+
 /*                ,NVL(DTA_ULT_ATUAL,' ')                                                                 AS DTA_ULT_ATUAL
                   ,NVL(REPLACE(REPLACE(VLR_CONTRIB_RISCO,'.',''),',','.'),' ')                            AS VLR_CONTRIB_RISCO
                   ,NVL(REPLACE(REPLACE(VLR_CONTRIB_PATRC,'.',''),',','.'),' ')                            AS VLR_CONTRIB_PATRC
@@ -1839,32 +1798,32 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   ,NVL(REPLACE(REPLACE(VLR_SIMUL_BENEF_PRAZO,'.',''),',','.'),' ')                        AS VLR_SIMUL_BENEF_PRAZO
                   ,NVL(DTA_ELEGIB_BENEF_PRAZO,' ')                                                        AS DTA_ELEGIB_BENEF_PRAZO
                   ,NVL(IDADE_ELEGIB_BENEF_PRAZO,' ')                                                      AS IDADE_ELEGIB_BENEF_PRAZO
-                  ,NVL(DTA_EXAURIM_BENEF_PRAZO,' ')    
+                  ,NVL(DTA_EXAURIM_BENEF_PRAZO,' ')
 */
 
-                  
-            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO; 
-                               
-    BEGIN                      
-        
-        BEGIN             
-             
+
+            FROM OWN_FUNCESP.FC_PRE_TBL_CARGA_EXTRATO;
+
+    BEGIN
+
+        BEGIN
+
              SELECT COUNT(*) INTO G_CONT_TEMP FROM FC_PRE_TBL_CARGA_EXTRATO  WHERE TPO_DADO = 1;
-              
+
            EXCEPTION
-             WHEN OTHERS THEN 
+             WHEN OTHERS THEN
                 DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
                 DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
-             
-        END;              
+
+        END;
       --
       --
 
-         
-         
-      FOR RG_TRATA_DADOS IN C_TRATA_DADOS 
+
+
+      FOR RG_TRATA_DADOS IN C_TRATA_DADOS
          LOOP
-         
+
 /*            DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.TPO_DADO                                             ||CHR(13)||
                                  RG_TRATA_DADOS.COD_EMPRS                                            ||CHR(13)||
                                  RG_TRATA_DADOS.NUM_RGTRO_EMPRG                                      ||CHR(13)||
@@ -1874,20 +1833,20 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                  --RG_TRATA_DADOS.DCR_PLANO                                            ||CHR(13)||
                                  --RG_TRATA_DADOS.PER_INIC_EXTR                                        ||CHR(13)||
                                  --RG_TRATA_DADOS.PER_FIM_EXTR                                         ||CHR(13)||
-                                 --RG_TRATA_DADOS.DTA_INIC_EXTR                                        ||CHR(13)||                                                               
+                                 --RG_TRATA_DADOS.DTA_INIC_EXTR                                        ||CHR(13)||
                                  --TO_CHAR(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')                   ||CHR(13)
-                               );  */ 
-                               
+                               );  */
 
-           
+
+
          DELETE FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
          WHERE  TPO_DADO         = RG_TRATA_DADOS.TPO_DADO
            AND  COD_EMPRS        = RG_TRATA_DADOS.COD_EMPRS
-           AND  NUM_RGTRO_EMPRG  = RG_TRATA_DADOS.NUM_RGTRO_EMPRG           
+           AND  NUM_RGTRO_EMPRG  = RG_TRATA_DADOS.NUM_RGTRO_EMPRG
            AND  DTA_FIM_EXTR     = TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')
            AND  DCR_PLANO        = RG_TRATA_DADOS.DCR_PLANO;
-         COMMIT;     
-     
+         COMMIT;
+
          INSERT INTO ATT.FC_PRE_TBL_BASE_EXTRAT_CTB (  TPO_DADO
                                                       ,COD_EMPRS
                                                       ,NUM_RGTRO_EMPRG
@@ -1908,8 +1867,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,SLD_PL_BD_INIC
                                                       ,CTB_PL_MOV_BD
                                                       ,RENT_PL_MOV_BD
-                                                      ,SLD_PL_BD_MOV_FIM 
-                                                      ,DCR_SLD_MOV_CV 
+                                                      ,SLD_PL_BD_MOV_FIM
+                                                      ,DCR_SLD_MOV_CV
                                                       ,SLD_PL_CV_MOV_INIC
                                                       ,CTB_PL_MOV_CV
                                                       ,RENT_PL_MOV_CV
@@ -1919,11 +1878,11 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,CTB_CTA_OBRIG_PARTIC
                                                       ,RENT_CTA_OBRIG_PARTIC
                                                       ,SLD_CTA_OBRIG_PARTIC_FIM
-                                                      ,DCR_CTA_NORM_PATROC 
-                                                      ,SLD_CTA_NORM_PATROC  
+                                                      ,DCR_CTA_NORM_PATROC
+                                                      ,SLD_CTA_NORM_PATROC
                                                       ,CTB_CTA_NORM_PATROC
                                                       ,RENT_NORM_PATROC
-                                                      ,SLD_NORM_PATROC_INIC                                                 
+                                                      ,SLD_NORM_PATROC_INIC
                                                       ,DCR_CTA_ESPEC_PARTIC
                                                       ,SLD_CTA_ESPEC_PARTIC
                                                       ,CTB_CTA_ESPEC_PARTIC
@@ -1998,7 +1957,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,PCT_RENT_LMTD_TOT_MES
                                                       ,PCT_RENT_IGPDI_PRM_MES
                                                       ,PCT_RENT_IGPDI_SEG_MES
-                                                      ,PCT_RENT_IGPDI_TER_MES   
+                                                      ,PCT_RENT_IGPDI_TER_MES
                                                       ,PCT_RENT_IGPDI_TOT_MES
                                                       ,PCT_RENT_URR_PRM_MES
                                                       ,PCT_RENT_URR_SEG_MES
@@ -2028,7 +1987,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,IDADE_INT_BD
                                                       ,VLR_CTB_INT_BD
                                                       ,IDADE_PROP_CV
-                                                      ,VLR_CTB_PROP_CV 
+                                                      ,VLR_CTB_PROP_CV
                                                       ,IDADE_INT_CV
                                                       ,VLR_CTB_INT_CV
                                                       ,DCR_COTA_INDEX_PLAN_1
@@ -2065,7 +2024,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,SLD_FIM_CTA_PORT_ABERTA
                                                       ,DCR_PORT_FECHADA
                                                       ,SLD_INIC_CTA_PORT_FECHADA
-                                                      ,VLR_TOT_CTB_PORT_FECHADA      
+                                                      ,VLR_TOT_CTB_PORT_FECHADA
                                                       ,RENT_TOT_CTB_PORT_FECHADA
                                                       ,SLD_FIM_CTA_PORT_FECHADA
                                                       ,DCR_PORT_JOIA_ABERTA
@@ -2085,7 +2044,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,SLDFIM_CTA_DISTFUNDPREVPARTI
                                                       ,DCR_DISTR_FUND_PREV_PATROC
                                                       ,SLD_INI_DIST_FUND_PREV_PATRO
-                                                      ,VLR_TOT_DIST_FUND_PREV_PATRO           
+                                                      ,VLR_TOT_DIST_FUND_PREV_PATRO
                                                       ,REN_TOT_DIST_FUND_PREV_PATRO
                                                       ,SLDFIM_CTA_DISTFUNDPREVPATRO
                                                       ,DCR_PORT_FINAL
@@ -2094,9 +2053,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                       ,RENT_TOT_CTB_PORT_FIM
                                                       ,SLD_FIM_CTA_PORT_FIM
                                                       ,DCR_SLD_PROJETADO
-                                                      ,VLR_SLD_PROJETADO													  
+                                                      ,VLR_SLD_PROJETADO
                                                       --,VLR_SLD_ADICIONAL
-                                                      --,VLR_BENEF_ADICIONAL 
+                                                      --,VLR_BENEF_ADICIONAL
                                                       --,DTA_ULT_ATUAL
                                                       --,VLR_CONTRIB_RISCO
                                                       --,VLR_CONTRIB_PATRC
@@ -2123,9 +2082,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.PER_INIC_EXTR
                                                        ,RG_TRATA_DADOS.PER_FIM_EXTR
                                                        ,TO_DATE(RG_TRATA_DADOS.DTA_INIC_EXTR,'DD/MM/RRRR')
-                                                       ,TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')                                                       
+                                                       ,TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR')
                                                        ,RG_TRATA_DADOS.DCR_SLD_MOV_SALDADO
-                                                       ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_INIC                                                       
+                                                       ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_INIC
                                                        ,RG_TRATA_DADOS.CTB_PL_SALDADO_MOV
                                                        ,RG_TRATA_DADOS.RENT_PL_SALDADO_MOV
                                                        ,RG_TRATA_DADOS.SLD_PL_SALDADO_MOV_FIM
@@ -2133,8 +2092,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.SLD_PL_BD_INIC
                                                        ,RG_TRATA_DADOS.CTB_PL_MOV_BD
                                                        ,RG_TRATA_DADOS.RENT_PL_MOV_BD
-                                                       ,RG_TRATA_DADOS.SLD_PL_BD_MOV_FIM 
-                                                       ,RG_TRATA_DADOS.DCR_SLD_MOV_CV 
+                                                       ,RG_TRATA_DADOS.SLD_PL_BD_MOV_FIM
+                                                       ,RG_TRATA_DADOS.DCR_SLD_MOV_CV
                                                        ,RG_TRATA_DADOS.SLD_PL_CV_MOV_INIC
                                                        ,RG_TRATA_DADOS.CTB_PL_MOV_CV
                                                        ,RG_TRATA_DADOS.RENT_PL_MOV_CV
@@ -2223,7 +2182,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.PCT_RENT_LMTD_TOT_MES
                                                        ,RG_TRATA_DADOS.PCT_RENT_IGPDI_PRM_MES
                                                        ,RG_TRATA_DADOS.PCT_RENT_IGPDI_SEG_MES
-                                                       ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TER_MES   
+                                                       ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TER_MES
                                                        ,RG_TRATA_DADOS.PCT_RENT_IGPDI_TOT_MES
                                                        ,RG_TRATA_DADOS.PCT_RENT_URR_PRM_MES
                                                        ,RG_TRATA_DADOS.PCT_RENT_URR_SEG_MES
@@ -2252,10 +2211,10 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.VLR_CTB_PROP_BD
                                                        ,RG_TRATA_DADOS.IDADE_INT_BD
                                                        ,RG_TRATA_DADOS.VLR_CTB_INT_BD
-                                                       ,RG_TRATA_DADOS.IDADE_PROP_CV                                               
+                                                       ,RG_TRATA_DADOS.IDADE_PROP_CV
                                                        ,RG_TRATA_DADOS.VLR_CTB_PROP_CV
                                                        ,RG_TRATA_DADOS.IDADE_INT_CV
-                                                       ,RG_TRATA_DADOS.VLR_CTB_INT_CV 
+                                                       ,RG_TRATA_DADOS.VLR_CTB_INT_CV
                                                        ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_1
                                                        ,RG_TRATA_DADOS.DCR_COTA_INDEX_PLAN_2
                                                        ,RG_TRATA_DADOS.DCR_CTA_APOS_INDIV_VOL_PARTIC
@@ -2290,7 +2249,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_ABERTA
                                                        ,RG_TRATA_DADOS.DCR_PORT_FECHADA
                                                        ,RG_TRATA_DADOS.SLD_INIC_CTA_PORT_FECHADA
-                                                       ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FECHADA      
+                                                       ,RG_TRATA_DADOS.VLR_TOT_CTB_PORT_FECHADA
                                                        ,RG_TRATA_DADOS.RENT_TOT_CTB_PORT_FECHADA
                                                        ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FECHADA
                                                        ,RG_TRATA_DADOS.DCR_PORT_JOIA_ABERTA
@@ -2310,7 +2269,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPARTI
                                                        ,RG_TRATA_DADOS.DCR_DISTR_FUND_PREV_PATROC
                                                        ,RG_TRATA_DADOS.SLD_INI_DIST_FUND_PREV_PATRO
-                                                       ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PATRO           
+                                                       ,RG_TRATA_DADOS.VLR_TOT_DIST_FUND_PREV_PATRO
                                                        ,RG_TRATA_DADOS.REN_TOT_DIST_FUND_PREV_PATRO
                                                        ,RG_TRATA_DADOS.SLDFIM_CTA_DISTFUNDPREVPATRO
                                                        ,RG_TRATA_DADOS.DCR_PORT_FINAL
@@ -2320,11 +2279,11 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        ,RG_TRATA_DADOS.SLD_FIM_CTA_PORT_FIM
                                                        ,RG_TRATA_DADOS.DCR_SLD_PROJETADO
                                                        ,RG_TRATA_DADOS.VLR_SLD_PROJETADO
-                                                       -----------------------------------    
+                                                       -----------------------------------
                                                        -- SEM DADOS DO CORPORATIVO:     --
                                                        -----------------------------------
                                                        --,RG_TRATA_DADOS.VLR_SLD_ADICIONAL
-                                                       --,RG_TRATA_DADOS.VLR_BENEF_ADICIONAL 
+                                                       --,RG_TRATA_DADOS.VLR_BENEF_ADICIONAL
                                                        --,RG_TRATA_DADOS.DTA_ULT_ATUAL
                                                        --,RG_TRATA_DADOS.VLR_CONTRIB_RISCO
                                                        --,RG_TRATA_DADOS.VLR_CONTRIB_PATRC
@@ -2335,66 +2294,66 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                        --,RG_TRATA_DADOS.DTA_ELEGIB_BENEF_PORCETAGEM
                                                        --,RG_TRATA_DADOS.IDADE_ELEGIB_PORCETAGEM
                                                        --,RG_TRATA_DADOS.DTA_EXAURIM_BENEF_PORCETAGEM
-                                                       --,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO                                                        
-                                                      );                                                                                                      
-                                                 
+                                                       --,RG_TRATA_DADOS.VLR_SIMUL_BENEF_PRAZO
+                                                      );
+
          G_TPO_DADO     := RG_TRATA_DADOS.TPO_DADO;
          G_COD_EMPRS    := RG_TRATA_DADOS.COD_EMPRS;
          G_DTA_FIM_EXTR := TO_DATE(RG_TRATA_DADOS.DTA_FIM_EXTR,'DD/MM/RRRR');
          G_DTA_EMISS    := TO_DATE(RG_TRATA_DADOS.DTA_EMISS,'DD/MM/RRRR');
-         G_DCR_PLANO    := RG_TRATA_DADOS.DCR_PLANO;                                                  
-                               
-         --DBMS_OUTPUT.PUT_LINE(G_DTA_EMISS);                   
+         G_DCR_PLANO    := RG_TRATA_DADOS.DCR_PLANO;
+
+         --DBMS_OUTPUT.PUT_LINE(G_DTA_EMISS);
          --DBMS_OUTPUT.PUT_LINE(RG_TRATA_DADOS.DTA_EMISS);
-                                             
-         IF SQL%ROWCOUNT > 0 THEN                                                                                                                                
-              V_COUNT := V_COUNT + 1;                                                                                                                                                         
+
+         IF SQL%ROWCOUNT > 0 THEN
+              V_COUNT := V_COUNT + 1;
          END IF;
-                   
+
       END LOOP;
       COMMIT;
       DBMS_OUTPUT.PUT_LINE('Total de Registros Carregado no Portal: '||G_CONT_TEMP);
       --
-      --            
-      
+      --
+
       -- GERA LOG DO PROCESSAMENTO:
       BEGIN
-         SELECT COUNT(*) 
+         SELECT COUNT(*)
            INTO G_COUNT_LOG
          FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
           WHERE TPO_DADO     = G_TPO_DADO
             AND COD_EMPRS    = G_COD_EMPRS
-            AND DTA_FIM_EXTR = G_DTA_FIM_EXTR            
+            AND DTA_FIM_EXTR = G_DTA_FIM_EXTR
             AND DCR_PLANO    = G_DCR_PLANO
             AND DTA_EMISS    = G_DTA_EMISS;
-      
+
         IF (G_COUNT_LOG > 0) THEN
-           
+
            G_CKECK := 'I'; -- INSERIDO
         ELSE
-           G_CKECK := 'E'; -- ERRO       
-        END IF;  
-        
+           G_CKECK := 'E'; -- ERRO
+        END IF;
+
        EXCEPTION
-         WHEN OTHERS THEN         
+         WHEN OTHERS THEN
            G_CKECK := 'A'; -- ABEND
-      END;   
-      
-      
+      END;
+
+
       BEGIN
-         
+
           SELECT  SYS_CONTEXT('USERENV', 'MODULE')       AS MODULE
                  ,SYS_CONTEXT('USERENV', 'OS_USER')      AS OS_USER
                  ,SYS_CONTEXT('USERENV', 'TERMINAL')     AS TERMINAL
-                 ,SYS_CONTEXT('USERENV', 'CURRENT_USER') AS "CURRENT_USER" 
-                 ,SYS_CONTEXT('USERENV', 'IP_ADDRESS')   AS IP_ADDRESS  
+                 ,SYS_CONTEXT('USERENV', 'CURRENT_USER') AS "CURRENT_USER"
+                 ,SYS_CONTEXT('USERENV', 'IP_ADDRESS')   AS IP_ADDRESS
            INTO   G_MODULE
                  ,G_OS_USER
                  ,G_TERMINAL
                  ,G_CURRENT_USER
-                 ,G_IP_ADDRESS                 
-         FROM DUAL;  
-         
+                 ,G_IP_ADDRESS
+         FROM DUAL;
+
          DELETE FROM OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO
          WHERE  TPO_DADO     = G_TPO_DADO
          AND    COD_EMPRS    = G_COD_EMPRS
@@ -2402,9 +2361,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
          AND    DTA_EMISS    = G_DTA_EMISS
          AND    DCR_PLANO    = G_DCR_PLANO;
          COMMIT;
-    
-         
-         
+
+
+
          INSERT INTO OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO (   COD_LOG_CARGA_EXTRATO
                                                               ,TPO_DADO
                                                               ,COD_EMPRS
@@ -2423,60 +2382,62 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                                                               ,DCR_PLANO
                                                             )
                                                     VALUES ( OWN_FUNCESP.PRE_TBL_LOG_CARGA_EXTRATO_SEQ.NEXTVAL
-                                                              ,G_TPO_DADO            
-                                                              ,G_COD_EMPRS                
-                                                              ,G_DTA_FIM_EXTR  
-                                                              ,G_DTA_EMISS     
-                                                              ,G_CONT_TEMP           
-                                                              ,SYSDATE          
-                                                              ,G_CKECK               
+                                                              ,G_TPO_DADO
+                                                              ,G_COD_EMPRS
+                                                              ,G_DTA_FIM_EXTR
+                                                              ,G_DTA_EMISS
+                                                              ,G_CONT_TEMP
+                                                              ,SYSDATE
+                                                              ,G_CKECK
                                                               ,NULL
-                                                               --           
-                                                              ,G_MODULE               
-                                                              ,G_OS_USER             
-                                                              ,G_TERMINAL            
-                                                              ,G_CURRENT_USER       
+                                                               --
+                                                              ,G_MODULE
+                                                              ,G_OS_USER
+                                                              ,G_TERMINAL
+                                                              ,G_CURRENT_USER
                                                               ,G_IP_ADDRESS
                                                               ,G_DCR_PLANO
                                                            );
                                                       COMMIT;
-         
-      
+
+
       END;
-                            
-      
-      IF V_COUNT = G_CONT_TEMP THEN 
-           R_VALIDA:= TRUE;    
-        RETURN R_VALIDA;        
-         COMMIT;         
-          
+
+
+      IF V_COUNT = G_CONT_TEMP THEN
+           R_VALIDA:= TRUE;
+        RETURN R_VALIDA;
+         COMMIT;
+
       ELSE
-         RETURN R_VALIDA;       
+         RETURN R_VALIDA;
        ROLLBACK;
-       
-      END IF;               
-                                     
+
+      END IF;
+
       --
-      EXCEPTION    
+      EXCEPTION
         WHEN OTHERS THEN
             DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
             DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
          RETURN FALSE;
          NULL;
     END FN_TRATA_ARQUIVO;
-   
+    --
+    --
+
+
+
        -- -------------------------------------------------------------------------------------------
        -- FUN_CALC_VLR
-       -- Descricao: 
-       -- -------------------------------------------------------------------------------------------    
+       -- Descricao:
+       -- -------------------------------------------------------------------------------------------
        FUNCTION FUN_CALC_VLR(  P_NUM_MATR  ATT.HIST_VALOR_BNF.NUM_MATR_PARTF%TYPE
                               ,P_DTA_FIM   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE
                               ,P_NUM_PLBNF ATT.HIST_VALOR_BNF.NUM_PLBNF%TYPE
                               ,P_DESC_PLBNF ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
                               ,P_CALC      NUMBER
-                               --
                               ,P_COD_EMPRS  ATT.EMPRESA.COD_EMPRS%TYPE
-                              --,P_DT_MOV     DATE
                               ,P_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE
                               ,P_NUM_CTFSS  ATT.SLD_CONTA_PARTIC_FSS.NUM_CTFSS%TYPE DEFAULT NULL
                               ,P_COD_UM     ATT.SLD_CONTA_PARTIC_FSS.COD_UM%TYPE DEFAULT NULL
@@ -2490,25 +2451,25 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
           R_RES3             ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SLD_ADICIONAL%TYPE;
           --
           R_VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE DEFAULT NULL;
-          R_VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE DEFAULT NULL;        
-          
+          R_VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE DEFAULT NULL;
+
 
         BEGIN
           --
           --
           -- CALCULO PARA AS EMPRESAS: ELETROPAULO/TIM
           IF (P_COD_EMPRS IN (40, 60) ) THEN
-                      
+
                 IF (P_CALC = 1) THEN
                   -- CALCULA VLR_DR
                   --
                   SELECT NVL(MAX(VLR_BENEF1_HTBNF),0)
                     INTO R_VLR_BENEF1
                     FROM HIST_VALOR_BNF
-                   WHERE NUM_MATR_PARTF = P_NUM_MATR
-                     AND COD_NATBNF     = P_COD_NATBNF -- 4
-                     AND NUM_PLBNF      = P_NUM_PLBNF
-                     AND TO_CHAR(DAT_INIVG_HTBNF,'YYYYMM') = TO_CHAR(P_DTA_FIM,'YYYYMM');            
+                   WHERE NUM_MATR_PARTF   = P_NUM_MATR
+                     AND COD_NATBNF       = P_COD_NATBNF -- 4
+                     AND NUM_PLBNF        = P_NUM_PLBNF
+                     AND DAT_INIVG_HTBNF = TO_DATE(P_DTA_FIM,'DD/MM/RRRR');
 
                   IF (R_VLR_BENEF1 IS NOT NULL) THEN
                     RETURN R_VLR_BENEF1;
@@ -2526,7 +2487,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                      AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
                      AND P.DTA_FIM_EXTR     = P_DTA_FIM
                      AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
-                     
+
                   IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
                     RETURN R_RENDA_ESTIM_PROP;
                   END IF;
@@ -2543,19 +2504,19 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                      AND UPPER(P.DCR_PLANO) = UPPER(P_DESC_PLBNF)
                      AND P.DTA_FIM_EXTR     = P_DTA_FIM
                      AND Y.NUM_MATR_PARTF   = P_NUM_MATR;
-                     
+
                   IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
                     RETURN R_RENDA_ESTIM_INT;
                   END IF;
                   --
-                  ELSIF (P_CALC = 4) THEN                
+                  ELSIF (P_CALC = 4) THEN
                   --
                   SELECT NVL(SUM(SCPF.VLR_SDANT_SDCTPR + SCPF.VLR_ENTMES_SDCTPR - SCPF.VLR_SAIMES_SDCTPR),0) AS VLR_RES1
                     INTO R_RES1
                     FROM  ATT.SLD_CONTA_PARTIC_FSS    SCPF
-                         ,ATT.PARTICIPANTE_FSS        PF  
+                         ,ATT.PARTICIPANTE_FSS        PF
                          ,ATT.ADESAO_PLANO_PARTIC_FSS APPF
-                         ,ATT.CONTA_FSS               CF  
+                         ,ATT.CONTA_FSS               CF
                    WHERE SCPF.NUM_MATR_PARTF = PF.NUM_MATR_PARTF
                      AND SCPF.NUM_CTFSS      = CF.NUM_CTFSS
                      AND SCPF.COD_UM         = CF.COD_UMARMZ_CTFSS
@@ -2568,36 +2529,36 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                      AND SCPF.ANOMES_MOVIM_SDCTPR = TO_NUMBER(TRUNC(TO_CHAR(P_DTA_FIM,'YYYYMM')));
                   --
                   --
-                                                   
+
                   SELECT MAX(VLR_CDIAUM)AS VLR_CDIAUM
                     INTO R_RES2
                     FROM COTACAO_DIA_UM
                     WHERE COD_UM = 248
                     AND DAT_CDIAUM = (SELECT MAX(DAT_CDIAUM)
                                         FROM COTACAO_DIA_UM
-                                       WHERE DAT_CDIAUM BETWEEN TO_DATE('01/'||TO_CHAR(P_DTA_FIM,'MM/RRRR'),'DD/MM/RRRR') 
+                                       WHERE DAT_CDIAUM BETWEEN TO_DATE('01/'||TO_CHAR(P_DTA_FIM,'MM/RRRR'),'DD/MM/RRRR')
                                                          AND TO_DATE(LAST_DAY(P_DTA_FIM),'DD/MM/RRRR')
                                                          AND COD_UM = 248);
-                                      
+
                       IF (     R_RES1 IS NOT NULL
                          AND R_RES2 IS NOT NULL ) THEN
                       R_RES3 := ROUND(R_RES1 * R_RES2);
                       RETURN NVL(R_RES3,0);
-                    END IF; 
+                    END IF;
                 ELSE
-                  DBMS_OUTPUT.PUT_LINE('-----------------------');                                                      
-                  
+                  DBMS_OUTPUT.PUT_LINE('-----------------------');
+
                 END IF;
-             
+
             -----------------------------------
             -- CALCULO PARA A EMPRESA: TIETE --
             -----------------------------------
-            
+
            ELSIF (P_COD_EMPRS IN (44) ) THEN
                --DBMS_OUTPUT.PUT_LINE('PATROCINADO TIETE');
-           
-                
-              IF (P_CALC = 1) THEN -- Valor do BDS - Modulo Saldado:              
+
+
+              IF (P_CALC = 1) THEN -- Valor do BDS - Modulo Saldado:
               -- CALCULA VLR_BENEF_BD_INTE
               --
               SELECT NVL(MAX(VLR_BENEF1_HTBNF),0)
@@ -2606,9 +2567,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                 WHERE NUM_MATR_PARTF = P_NUM_MATR
                 AND COD_NATBNF       = P_COD_NATBNF -- 4
                 AND NUM_PLBNF        = P_NUM_PLBNF
-                AND TO_CHAR(DAT_INIVG_HTBNF, 'YYYYMM') = TO_CHAR(P_DTA_FIM,'YYYYMM'); 
-                
-                           
+                AND TO_CHAR(DAT_INIVG_HTBNF, 'YYYYMM') = TO_CHAR(P_DTA_FIM,'YYYYMM');
+
+
                 IF (R_VLR_BENEF_BD_INTE IS NOT NULL) THEN
                   RETURN R_VLR_BENEF_BD_INTE;
                 END IF;
@@ -2621,10 +2582,10 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                   FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
                    INNER JOIN ATT.PARTICIPANTE_FSS Y ON Y.COD_EMPRS = FPT.COD_EMPRS
                                           AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
-                       WHERE FPT.COD_EMPRS        = P_COD_EMPRS 
-                         AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   
-                         AND Y.NUM_MATR_PARTF     = P_NUM_MATR    
-                         AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     
+                       WHERE FPT.COD_EMPRS        = P_COD_EMPRS
+                         AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF
+                         AND Y.NUM_MATR_PARTF     = P_NUM_MATR
+                         AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;
 
                 IF (R_RENDA_ESTIM_PROP IS NOT NULL) THEN
                   RETURN R_RENDA_ESTIM_PROP;
@@ -2638,31 +2599,31 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                  FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB FPT
                    INNER JOIN ATT.PARTICIPANTE_FSS Y  ON Y.COD_EMPRS = FPT.COD_EMPRS
                                           AND Y.NUM_RGTRO_EMPRG = TO_NUMBER(SUBSTR(FPT.NUM_RGTRO_EMPRG,1,LENGTH(FPT.NUM_RGTRO_EMPRG) - 2))
-                         WHERE FPT.COD_EMPRS        = P_COD_EMPRS 
-                           AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF   
-                           AND Y.NUM_MATR_PARTF     = P_NUM_MATR    
-                           AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;     
+                         WHERE FPT.COD_EMPRS        = P_COD_EMPRS
+                           AND UPPER(FPT.DCR_PLANO) = P_DESC_PLBNF
+                           AND Y.NUM_MATR_PARTF     = P_NUM_MATR
+                           AND FPT.DTA_FIM_EXTR     = P_DTA_FIM;
 
                 IF (R_RENDA_ESTIM_INT IS NOT NULL) THEN
                   RETURN R_RENDA_ESTIM_INT;
                 END IF;
-                
+
                 ELSE
-                 DBMS_OUTPUT.PUT_LINE('------------------');               
-                END IF;           
-           
+                 DBMS_OUTPUT.PUT_LINE('------------------');
+                END IF;
+
            -- AQUI SERA IMPLEMENTADO A REGRA PARA A NOVA PATROCINADORA...
           END IF;
-          
+
           EXCEPTION
             WHEN OTHERS THEN
               RETURN NULL;
               DBMS_OUTPUT.PUT_LINE('CODIGO DO ERRO: ' || SQLCODE || ' MSG: ' ||SQLERRM);
               DBMS_OUTPUT.PUT_LINE('LINHA: ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
           END FUN_CALC_VLR;
-        
-        
-        
+
+
+
    -- PATROCINADORA: PSAP/TIETE
    PROCEDURE PROC_EXT_PREV_TIETE(P_COD_EMPRESA   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE,
                                  P_DCR_PLANO     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE,
@@ -2673,7 +2634,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
            L_DTA_FIM     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE;
            L_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE:=4;
-    
+
 
          TYPE REC_BASE IS RECORD(   VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE
                                    ,VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE
@@ -2709,14 +2670,14 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
       BEGIN
 
-            IF (P_DTA_MOV IS NULL)THEN 
+            IF (P_DTA_MOV IS NULL)THEN
             -- FC_PRE_TBL_BASE_EXTRAT_CTB
             -- PEGA MAIOR DATA
             SELECT MAX(DTA_FIM_EXTR)AS DTA_FIM_EXTR
                INTO L_DTA_FIM
                FROM ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
-             WHERE COD_EMPRS        = P_COD_EMPRESA 
-              AND UPPER(DCR_PLANO)  = P_DCR_PLANO;   
+             WHERE COD_EMPRS        = P_COD_EMPRESA
+              AND UPPER(DCR_PLANO)  = P_DCR_PLANO;
             --
             ELSE
             --
@@ -2731,14 +2692,14 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             LOOP
             L_COUNT := L_COUNT + 1;
             --
-            
+
             TB_REC_BASE.VLR_BENEF_BD_PROP      := 0; --VLR_BENEF_BD_PROP
             TB_REC_BASE.VLR_BENEF_BD_INTE      := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 1, P_COD_EMPRESA, L_COD_NATBNF);  --VLR_BENEF_BD_INTE
             TB_REC_BASE.RENDA_ESTIM_PROP       := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 2, P_COD_EMPRESA, L_COD_NATBNF ); --RENDA_ESTIM_PROP
             TB_REC_BASE.RENDA_ESTIM_INT        := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, P_DCR_PLANO, 3, P_COD_EMPRESA, L_COD_NATBNF);  --RENDA_ESTIM_INT
             TB_REC_BASE.VLR_CTB_PROP_BD        := 0; --VLR_CTB_PROP_BD
             TB_REC_BASE.VLR_CTB_INT_BD         := ATT.FCESP_VLR_CTB_ASSIST(RG.COD_PLANO, TB_REC_BASE.VLR_BENEF_BD_INTE);                                  --VLR_CTB_INT_BD
-            
+
 
              UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB
                 SET  VLR_BENEF_BD_PROP  = NVL(TB_REC_BASE.VLR_BENEF_BD_PROP,0)
@@ -2746,7 +2707,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
                     ,RENDA_ESTIM_PROP   = NVL(TB_REC_BASE.RENDA_ESTIM_PROP,0)
                     ,RENDA_ESTIM_INT    = NVL(TB_REC_BASE.RENDA_ESTIM_INT,0)
                     ,VLR_CTB_PROP_BD    = NVL(TB_REC_BASE.VLR_CTB_PROP_BD,0)
-                    ,VLR_CTB_INT_BD     = NVL(TB_REC_BASE.VLR_CTB_INT_BD,0) 
+                    ,VLR_CTB_INT_BD     = NVL(TB_REC_BASE.VLR_CTB_INT_BD,0)
                  --
                 WHERE TPO_DADO          = RG.TPO_DADO
                   AND COD_EMPRS         = RG.COD_EMPRS
@@ -2757,14 +2718,15 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
               IF L_C_UPD > 0 THEN
 
-                 IF (L_COUNT = L_C_UPD) THEN                    
+                 IF (L_COUNT = L_C_UPD) THEN
                     --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: '||TO_CHAR(L_COUNT));
                     DBMS_OUTPUT.PUT_LINE('');
                  END IF;
 
               END IF;
-          
+
             END LOOP;
+      COMMIT;
             --
       END;
 
@@ -2775,8 +2737,8 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
 
    END PROC_EXT_PREV_TIETE;
    --
-   --   
-   
+   --
+
   -- PATROCINADORA: (PSAP/ELETROPAULO - TIM)
   PROCEDURE PROC_EXT_PREV_ELETROPAULO (  PCOD_EMPRESA ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.COD_EMPRS%TYPE
                                         ,PDCR_PLANO   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DCR_PLANO%TYPE
@@ -2789,13 +2751,13 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
       L_NUM_CTFSS  ATT.SLD_CONTA_PARTIC_FSS.NUM_CTFSS%TYPE    := 976;
       L_COD_UM     ATT.SLD_CONTA_PARTIC_FSS.COD_UM%TYPE       := 248;
       L_COD_NATBNF ATT.HIST_VALOR_BNF.COD_NATBNF%TYPE         := 4;
-      
-      TYPE REC_BASE IS RECORD ( VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE   -- VLR_DQ 
-                               ,VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE   -- VLR_DR 
-                               ,RENDA_ESTIM_PROP    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_PROP%TYPE    -- VLR_DU 
-                               ,RENDA_ESTIM_INT     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_INT%TYPE     -- VLR_DV 
-                               ,VLR_CTB_INT_BD      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_INT_BD%TYPE      -- VLR_EI 
-                               ,VLR_CTB_PROP_BD     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_PROP_BD%TYPE     -- VLR_EG 
+
+      TYPE REC_BASE IS RECORD ( VLR_BENEF_BD_PROP   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_PROP%TYPE   -- VLR_DQ
+                               ,VLR_BENEF_BD_INTE   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_BD_INTE%TYPE   -- VLR_DR
+                               ,RENDA_ESTIM_PROP    ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_PROP%TYPE    -- VLR_DU
+                               ,RENDA_ESTIM_INT     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.RENDA_ESTIM_INT%TYPE     -- VLR_DV
+                               ,VLR_CTB_INT_BD      ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_INT_BD%TYPE      -- VLR_EI
+                               ,VLR_CTB_PROP_BD     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_CTB_PROP_BD%TYPE     -- VLR_EG
                                ,VLR_SLD_ADICIONAL   ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_SLD_ADICIONAL%TYPE   -- VLR_RES1 * VLR_RES2 = VLR_RES3
                                ,VLR_BENEF_ADICIONAL ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.VLR_BENEF_ADICIONAL%TYPE -- VLR_RES3 / 130
                               );
@@ -2846,7 +2808,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
       LOOP
         L_C_INS := L_C_INS + 1;
         --
-        
+
         TB_REC_BASE.VLR_BENEF_BD_INTE   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 1, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DR
         TB_REC_BASE.RENDA_ESTIM_PROP    := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 2, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DU
         TB_REC_BASE.RENDA_ESTIM_INT     := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 3, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- VLR_DV
@@ -2854,7 +2816,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
         TB_REC_BASE.VLR_CTB_PROP_BD     := 0;                                                                                                                                      -- EG
         TB_REC_BASE.VLR_SLD_ADICIONAL   := FUN_CALC_VLR(RG.NUM_MATR_PARTF, L_DTA_FIM, RG.COD_PLANO, RG.DCR_PLANO, 4, PCOD_EMPRESA, L_COD_NATBNF, L_NUM_CTFSS, L_COD_UM); -- RES3
         TB_REC_BASE.VLR_BENEF_ADICIONAL := TB_REC_BASE.VLR_SLD_ADICIONAL / 130;                         -- RES4
-        
+
         --
         UPDATE ATT.FC_PRE_TBL_BASE_EXTRAT_CTB A
            SET  VLR_BENEF_BD_PROP   = 0
@@ -2869,9 +2831,9 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             AND COD_EMPRS       = RG.COD_EMPRS
             AND NUM_RGTRO_EMPRG = RG.NUM_RGTRO_EMPRG
             AND DTA_FIM_EXTR    = L_DTA_FIM;
-          
+
           L_C_UPD := SQL%ROWCOUNT;
-          
+
           IF L_C_UPD > 0 THEN
             IF (L_C_INS = L_C_UPD) THEN
               --DBMS_OUTPUT.PUT_LINE('LINHAS AFETADAS: ' || TO_CHAR(L_C_UPD));
@@ -2879,6 +2841,7 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
             END IF;
           END IF;
       END LOOP;
+    COMMIT;
       --
     END;
   EXCEPTION
@@ -2888,58 +2851,58 @@ CREATE OR REPLACE PACKAGE BODY OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO IS
   END PROC_EXT_PREV_ELETROPAULO;
 
 
-  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL  -- 1: ELETROPAULO / 2: TIM / 3: TIETE 
+  PROCEDURE PRE_INICIA_PROCESSAMENTO( P_PRC_PROCESSO NUMBER DEFAULT NULL  -- 1: ELETROPAULO / 2: TIM / 3: TIETE
                                      ,P_PRC_DATA     ATT.FC_PRE_TBL_BASE_EXTRAT_CTB.DTA_FIM_EXTR%TYPE DEFAULT NULL
                                      ,P_NAME_ARQ     VARCHAR2 DEFAULT NULL)
-  IS   
-  
+  IS
+
   VAR_FUNC   BOOLEAN;
-  
+
   BEGIN
-      
+
      IF (P_PRC_PROCESSO = 1) THEN
         --
-        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
-        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO; 
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
         PROC_EXT_PREV_ELETROPAULO(40,'PSAP/ELETROPAULO', P_PRC_DATA); -- ELETROPAULO
         PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 2) THEN
         --
-        
-        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
-        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
+
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
         PROC_EXT_PREV_ELETROPAULO(60,'PSAP/ELETROPAULO', P_PRC_DATA); -- TIM
         PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 3) THEN
         --
-        
-        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
-        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;         
+
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);
+        VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
         PROC_EXT_PREV_TIETE(44,'PSAP/TIETE', P_PRC_DATA); -- TIETE
         PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
         COMMIT;
         --
         ELSIF (P_PRC_PROCESSO = 4) THEN -- SALDADO: APENAS PLANO CD
         --
-        
-        PRC_CARGA_ARQUIVO(P_NAME_ARQ);     
+
+        PRC_CARGA_ARQUIVO(P_NAME_ARQ);
         VAR_FUNC := OWN_FUNCESP.PKG_EXT_PREVIDENCIARIO.FN_TRATA_ARQUIVO;
         PRC_GERA_ARQ_CSV(REPLACE(P_NAME_ARQ, '.txt','.csv'));
-        COMMIT;   
-        --        
+        COMMIT;
+        --
         ELSE
         --
-        
+
         DBMS_OUTPUT.PUT_LINE(' - ');
         DBMS_OUTPUT.PUT_LINE('CODIGO ERRO: '||SQLCODE|| ' - '||'MSG: '||SQLERRM);
         DBMS_OUTPUT.PUT_LINE('LINHA: '||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE);
         --
       END IF;
-      
+
   END PRE_INICIA_PROCESSAMENTO;
-  
+
 END PKG_EXT_PREVIDENCIARIO;
